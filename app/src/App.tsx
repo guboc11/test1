@@ -14,6 +14,7 @@ const DEFAULT_PARAMS: SimulationParams = {
   voterTurnout: 70,
   earlyVoteRatio: 30,
   switchRate: 3,
+  regionPartyRates: {},
 };
 
 function InfoDialog({ dialogRef }: { dialogRef: React.RefObject<HTMLDialogElement | null> }) {

@@ -8,6 +8,7 @@ export interface SimulationParams {
   voterTurnout: number;   // 0–100
   earlyVoteRatio: number; // 0–100 (사전 투표 비율)
   switchRate: number;     // 0–100 (변심율: 본 투표 때 무작위 정당으로 이탈)
+  regionPartyRates: Record<string, number[]>; // regionId → [A,B,C,D,E] 합계 100
 }
 
 export interface RegionResult {

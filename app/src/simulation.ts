@@ -43,26 +43,41 @@ function applySwitch(probs: number[], switchRate: number): number[] {
   return probs.map((p) => (1 - s) * p + s * (1 / NUM_PARTIES));
 }
 
-const REGION_DATA = [
-  { id: 'seoul',              nameKr: '서울', weight: 18.3 },
-  { id: 'gyeonggi',          nameKr: '경기', weight: 26.1 },
-  { id: 'incheon',           nameKr: '인천', weight: 5.7  },
-  { id: 'busan',             nameKr: '부산', weight: 6.6  },
+// 출처: 행정안전부 주민등록인구 (2026년 1월 기준)
+export const REGION_DATA = [
+  { id: 'seoul',              nameKr: '서울', weight: 18.2 },
+  { id: 'gyeonggi',          nameKr: '경기', weight: 26.9 },
+  { id: 'incheon',           nameKr: '인천', weight: 6.0  },
+  { id: 'busan',             nameKr: '부산', weight: 6.3  },
   { id: 'daegu',             nameKr: '대구', weight: 4.6  },
-  { id: 'daejeon',           nameKr: '대전', weight: 3.0  },
-  { id: 'gwangju',           nameKr: '광주', weight: 2.9  },
-  { id: 'ulsan',             nameKr: '울산', weight: 2.2  },
-  { id: 'sejong',            nameKr: '세종', weight: 0.7  },
-  { id: 'gangwon',           nameKr: '강원', weight: 3.0  },
+  { id: 'daejeon',           nameKr: '대전', weight: 2.8  },
+  { id: 'gwangju',           nameKr: '광주', weight: 2.7  },
+  { id: 'ulsan',             nameKr: '울산', weight: 2.1  },
+  { id: 'sejong',            nameKr: '세종', weight: 0.8  },
+  { id: 'gangwon',           nameKr: '강원', weight: 2.9  },
   { id: 'north-chungcheong', nameKr: '충북', weight: 3.1  },
-  { id: 'south-chungcheong', nameKr: '충남', weight: 4.1  },
-  { id: 'north-jeolla',      nameKr: '전북', weight: 3.5  },
+  { id: 'south-chungcheong', nameKr: '충남', weight: 4.2  },
+  { id: 'north-jeolla',      nameKr: '전북', weight: 3.4  },
   { id: 'south-jeolla',      nameKr: '전남', weight: 3.5  },
-  { id: 'north-gyeongsang',  nameKr: '경북', weight: 5.1  },
-  { id: 'south-gyeongsang',  nameKr: '경남', weight: 6.4  },
-  { id: 'jeju',              nameKr: '제주', weight: 1.2  },
+  { id: 'north-gyeongsang',  nameKr: '경북', weight: 4.9  },
+  { id: 'south-gyeongsang',  nameKr: '경남', weight: 6.3  },
+  { id: 'jeju',              nameKr: '제주', weight: 1.3  },
 ];
 
+
+function computeWeightedRates(regions: RegionResult[], view: 'early' | 'main'): number[] {
+  const totalCount = regions.reduce(
+    (s, r) => s + (view === 'early' ? r.earlyVoteCount : r.mainVoteCount), 0,
+  );
+  if (totalCount === 0) return Array(NUM_PARTIES).fill(1 / NUM_PARTIES);
+  return Array(NUM_PARTIES).fill(0).map((_, p) =>
+    regions.reduce((s, r) => {
+      const count = view === 'early' ? r.earlyVoteCount : r.mainVoteCount;
+      const rate  = view === 'early' ? r.earlyVoteRates[p] : r.mainVoteRates[p];
+      return s + count * rate;
+    }, 0) / totalCount,
+  );
+}
 
 export function runSimulation(params: SimulationParams): SimulationResult {
   const { totalPopulation, partyRates, voterTurnout, earlyVoteRatio, switchRate } = params;
@@ -79,21 +94,26 @@ export function runSimulation(params: SimulationParams): SimulationResult {
 
   const regions: RegionResult[] = REGION_DATA.map((r) => {
     const w = r.weight / 100;
-    // 지역 유권자도 확률적으로 배분
+    // 지역별 커스텀 지지율이 있으면 사용, 없으면 전국 지지율 사용
+    const customRates = params.regionPartyRates[r.id];
+    const regionProbs = customRates
+      ? applySwitch(customRates.map((v) => v / 100), switchRate)
+      : votingProbs;
     const earlyCount = simulateCount(earlyTotal, w);
     const mainCount  = simulateCount(mainTotal,  w);
     return {
       id:             r.id,
       nameKr:         r.nameKr,
-      earlyVoteRates: simulatePartyVotes(earlyCount, votingProbs),
-      mainVoteRates:  simulatePartyVotes(mainCount,  votingProbs),
+      earlyVoteRates: simulatePartyVotes(earlyCount, regionProbs),
+      mainVoteRates:  simulatePartyVotes(mainCount,  regionProbs),
       earlyVoteCount: earlyCount,
       mainVoteCount:  mainCount,
     };
   });
 
-  const earlyVoteRates = simulatePartyVotes(earlyTotal, votingProbs);
-  const mainVoteRates  = simulatePartyVotes(mainTotal,  votingProbs);
+  // 전체 결과 = 지역별 결과의 가중합
+  const earlyVoteRates = computeWeightedRates(regions, 'early');
+  const mainVoteRates  = computeWeightedRates(regions, 'main');
 
   return {
     earlyVoteRates,

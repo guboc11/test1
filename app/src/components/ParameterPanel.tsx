@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PARTY_COLORS, PARTY_LABELS, adjustPartyRates } from '../types';
 import type { SimulationParams } from '../types';
+import { REGION_DATA } from '../simulation';
 
 interface Props {
   params: SimulationParams;
@@ -137,6 +138,19 @@ function Slider({ label, value, min, max, step = 1, unit = '%', decimals, note, 
   );
 }
 
+function randomizeRegionRates(globalRates: number[]): number[] {
+  const STRENGTH = 0.9;
+  const base  = globalRates.map((r) => Math.log(Math.max(r, 0.5)));
+  const noisy = base.map((v) => v + (Math.random() * 2 - 1) * STRENGTH);
+  const exp   = noisy.map((v) => Math.exp(v));
+  const sum   = exp.reduce((s, v) => s + v, 0);
+  const raw   = exp.map((v) => Math.round((v / sum * 100) * 10) / 10);
+  // 합계 100 보정
+  const diff  = parseFloat((100 - raw.reduce((s, v) => s + v, 0)).toFixed(1));
+  raw[0]      = parseFloat((raw[0] + diff).toFixed(1));
+  return raw;
+}
+
 const POPULATION_MAX     = 51_000_000;
 const POPULATION_VOTER_MAX = 44_251_919; // 2024년 제22대 국회의원선거 선거인수
 const POPULATION_TICKS: Tick[] = [
@@ -149,7 +163,12 @@ const POPULATION_TICKS: Tick[] = [
 export default function ParameterPanel({ params, onChange, onRun }: Props) {
   const [locked, setLocked] = useState<boolean[]>(Array(5).fill(false));
   const [showFloating, setShowFloating] = useState(false);
-  const runBtnRef       = useRef<HTMLButtonElement>(null);
+  const [showAdv, setShowAdv] = useState(false);
+  const [activeRegionId, setActiveRegionId] = useState(REGION_DATA[0].id);
+  const [lockedRegion, setLockedRegion] = useState<Record<string, boolean[]>>(
+    Object.fromEntries(REGION_DATA.map((r) => [r.id, Array(5).fill(false)])),
+  );
+  const runBtnRef         = useRef<HTMLButtonElement>(null);
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -173,6 +192,45 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
     setLocked((prev) => prev.map((v, i) => (i === index ? !v : v)));
 
   const totalCheck = Math.round(params.partyRates.reduce((s, v) => s + v, 0));
+
+  const setRegionRate = (regionId: string, index: number, v: number) => {
+    const current = params.regionPartyRates[regionId] ?? params.partyRates;
+    const lk      = lockedRegion[regionId] ?? Array(5).fill(false);
+    onChange({
+      ...params,
+      regionPartyRates: {
+        ...params.regionPartyRates,
+        [regionId]: adjustPartyRates(current, index, v, lk),
+      },
+    });
+  };
+
+  const toggleRegionLock = (regionId: string, index: number) => {
+    setLockedRegion((prev) => ({
+      ...prev,
+      [regionId]: (prev[regionId] ?? Array(5).fill(false)).map((v, i) => (i === index ? !v : v)),
+    }));
+  };
+
+  const resetRegion = (regionId: string) => {
+    const { [regionId]: _, ...rest } = params.regionPartyRates;
+    onChange({ ...params, regionPartyRates: rest });
+    setLockedRegion((prev) => ({ ...prev, [regionId]: Array(5).fill(false) }));
+  };
+
+  const resetAllRegions = () => {
+    onChange({ ...params, regionPartyRates: {} });
+    setLockedRegion(Object.fromEntries(REGION_DATA.map((r) => [r.id, Array(5).fill(false)])));
+  };
+
+  const randomizeAllRegions = () => {
+    onChange({
+      ...params,
+      regionPartyRates: Object.fromEntries(
+        REGION_DATA.map((r) => [r.id, randomizeRegionRates(params.partyRates)]),
+      ),
+    });
+  };
 
   const formContent = (
     <>
@@ -217,7 +275,91 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
           onChange={(v) => set('totalPopulation')(Math.min(v, POPULATION_VOTER_MAX))}
         />
       </div>
+
+      <button className="adv-btn" onClick={() => setShowAdv((v) => !v)}>
+        지역별 정당 지지율 고급 설정 {showAdv ? '▲' : '▼'}
+      </button>
     </>
+  );
+
+  const advContent = showAdv && (
+    <div className="adv-inline">
+      <p className="adv-desc">따로 설정하지 않은 지역은 전체 정당 지지율을 따릅니다.</p>
+      <div className="adv-action-row">
+        <button className="adv-action-btn" onClick={randomizeAllRegions}>
+          🎲 랜덤 설정
+        </button>
+        <button className="adv-action-btn" disabled title="추후 지원 예정">
+          🗺 실제 데이터 적용
+        </button>
+      </div>
+
+      <div className="region-tabs">
+        {REGION_DATA.map((r) => {
+          const isCustomized = !!params.regionPartyRates[r.id];
+          return (
+            <button
+              key={r.id}
+              className={`region-tab${activeRegionId === r.id ? ' active' : ''}${isCustomized ? ' customized' : ''}`}
+              onClick={() => setActiveRegionId(r.id)}
+            >
+              {r.nameKr}
+              {isCustomized && <span className="region-tab-dot" />}
+            </button>
+          );
+        })}
+      </div>
+
+      {(() => {
+        const region       = REGION_DATA.find((r) => r.id === activeRegionId)!;
+        const isCustomized = !!params.regionPartyRates[activeRegionId];
+        const rates        = params.regionPartyRates[activeRegionId] ?? params.partyRates;
+        const lk           = lockedRegion[activeRegionId] ?? Array(5).fill(false);
+        const total        = Math.round(rates.reduce((s, v) => s + v, 0));
+        return (
+          <div className="adv-region-content">
+            <div className="section-label">
+              {region.nameKr} 정당 지지율
+              <span className={`total-badge ${total === 100 ? 'ok' : 'err'}`}>
+                합계 {total}%
+              </span>
+              {!isCustomized && (
+                <span className="region-using-global">전국 지지율 적용 중</span>
+              )}
+            </div>
+            <div className="party-grid">
+              {PARTY_LABELS.map((label, i) => (
+                <Slider
+                  key={label}
+                  label={`${label}당`}
+                  value={parseFloat(rates[i].toFixed(1))}
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  decimals={1}
+                  editable
+                  color={PARTY_COLORS[i]}
+                  locked={lk[i]}
+                  onLockToggle={() => toggleRegionLock(activeRegionId, i)}
+                  onChange={(v) => setRegionRate(activeRegionId, i, v)}
+                />
+              ))}
+            </div>
+            {isCustomized && (
+              <button className="reset-region-btn" onClick={() => resetRegion(activeRegionId)}>
+                이 지역 초기화
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
+      <div className="adv-footer">
+        <button className="adv-reset-all-btn" onClick={resetAllRegions}>
+          전체 초기화
+        </button>
+      </div>
+    </div>
   );
 
   return (
@@ -225,6 +367,7 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
       <div className="panel">
         <h2>파라미터 설정</h2>
         {formContent}
+        {advContent}
         <button ref={runBtnRef} className="run-btn" onClick={onRun}>
           시뮬레이션 실행
         </button>
@@ -255,6 +398,7 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
             <button className="dialog-close-btn" onClick={() => settingsDialogRef.current?.close()}>✕</button>
           </div>
           {formContent}
+          {advContent}
           <button
             className="run-btn"
             style={{ marginTop: '1.5rem' }}
