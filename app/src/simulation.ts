@@ -63,11 +63,13 @@ const REGION_DATA = [
   { id: 'jeju',              nameKr: '제주', weight: 1.2  },
 ];
 
+
 export function runSimulation(params: SimulationParams): SimulationResult {
   const { totalPopulation, partyRates, voterTurnout, earlyVoteRatio, switchRate } = params;
 
-  const earlyProbs = partyRates.map((r) => r / 100);
-  const mainProbs  = applySwitch(earlyProbs, switchRate);
+  const trueProbs   = partyRates.map((r) => r / 100);
+  // 변심율: 사전·본 투표 구분 없이 투표 당일 s 확률로 다른 정당 선택
+  const votingProbs = applySwitch(trueProbs, switchRate);
 
   // 각 개인이 독립적으로 투표 여부를 결정 → 실제 투표자 수가 매번 달라짐
   const totalVoters = simulateCount(totalPopulation, voterTurnout / 100);
@@ -83,16 +85,19 @@ export function runSimulation(params: SimulationParams): SimulationResult {
     return {
       id:             r.id,
       nameKr:         r.nameKr,
-      earlyVoteRates: simulatePartyVotes(earlyCount, earlyProbs),
-      mainVoteRates:  simulatePartyVotes(mainCount,  mainProbs),
+      earlyVoteRates: simulatePartyVotes(earlyCount, votingProbs),
+      mainVoteRates:  simulatePartyVotes(mainCount,  votingProbs),
       earlyVoteCount: earlyCount,
       mainVoteCount:  mainCount,
     };
   });
 
+  const earlyVoteRates = simulatePartyVotes(earlyTotal, votingProbs);
+  const mainVoteRates  = simulatePartyVotes(mainTotal,  votingProbs);
+
   return {
-    earlyVoteRates: simulatePartyVotes(earlyTotal, earlyProbs),
-    mainVoteRates:  simulatePartyVotes(mainTotal,  mainProbs),
+    earlyVoteRates,
+    mainVoteRates,
     earlyVoteTotal: earlyTotal,
     mainVoteTotal:  mainTotal,
     regions,

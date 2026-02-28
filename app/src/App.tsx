@@ -5,10 +5,11 @@ import { runSimulation } from './simulation';
 import ParameterPanel from './components/ParameterPanel';
 import VoteResult from './components/VoteResult';
 import KoreaMap from './components/KoreaMap';
+import StatsSummary from './components/StatsSummary';
 import './App.css';
 
 const DEFAULT_PARAMS: SimulationParams = {
-  totalPopulation: 51_000_000,
+  totalPopulation: 10_000,
   partyRates: [20, 20, 20, 20, 20],
   voterTurnout: 70,
   earlyVoteRatio: 30,
@@ -68,8 +69,8 @@ function InfoDialog({ dialogRef }: { dialogRef: React.RefObject<HTMLDialogElemen
               <span className="layer-num">4</span>
               <div>
                 <strong>변심</strong>
-                <p>사전 투표 후 <em>변심할 확률</em>로 본 투표 시 다른 정당으로 이탈합니다.<br />
-                본 투표 지지율 = <code>(1−s)·p<sub>i</sub> + s·(1/5)</code></p>
+                <p>사전·본 투표 구분 없이, 투표 당일 <em>변심할 확률</em> s로 지지 정당 대신 무작위 정당을 선택합니다.<br />
+                실제 투표 확률 = <code>(1−s)·p<sub>i</sub> + s·(1/5)</code></p>
               </div>
             </div>
           </div>
@@ -82,14 +83,15 @@ function InfoDialog({ dialogRef }: { dialogRef: React.RefObject<HTMLDialogElemen
         <section className="info-section">
           <h3>변심율 공식</h3>
           <p>
-            사전 투표 후 본 투표일까지 일부 유권자가 지지 정당을 바꿀 수 있습니다.<br />
-            변심율 <em>s</em>를 적용한 본 투표 지지율:
+            사전·본 투표 모두, 투표 당일 확률 <em>s</em>로 원래 지지 정당 대신 다른 정당을 선택합니다.<br />
+            변심율 <em>s</em>를 적용한 실제 투표 확률:
           </p>
           <div className="info-formula">
-            P<sub>본</sub>(i) = (1 − s) × P<sub>사전</sub>(i) + s × 1/5
+            P<sub>투표</sub>(i) = (1 − s) × p<sub>i</sub> + s × 1/5
           </div>
           <p className="info-note">
-            s = 0이면 사전·본 투표 지지율 동일. s가 클수록 모든 정당이 20%로 회귀합니다.
+            s = 0이면 지지율 그대로 반영. s가 클수록 모든 정당이 20%로 회귀합니다.<br />
+            사전·본 투표 모두 동일한 확률 구조이므로, 두 결과의 차이는 순전히 표본 크기 차이에서 비롯됩니다.
           </p>
         </section>
 
@@ -136,6 +138,8 @@ export default function App() {
 
       {result && (
         <>
+          <StatsSummary result={result} />
+
           <section className="results-section">
             <VoteResult title="사전 투표" voteRates={result.earlyVoteRates} total={result.earlyVoteTotal} />
             <VoteResult title="본 투표"   voteRates={result.mainVoteRates}  total={result.mainVoteTotal}  />
@@ -145,7 +149,7 @@ export default function App() {
             <h2 className="map-section-title">지역별 결과</h2>
             <div className="map-dual">
               <KoreaMap result={result} view="early" title="사전 투표" />
-              <KoreaMap result={result} view="main"  title="본 투표" />
+              <KoreaMap result={result} view="main"  title="본 투표"  />
             </div>
             <div className="map-legend">
               {PARTY_LABELS.map((label, i) => (

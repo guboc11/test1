@@ -27,6 +27,27 @@ export interface SimulationResult {
   regions: RegionResult[];
 }
 
+/** 표준정규분포 누적함수 근사 (Abramowitz & Stegun) */
+function erfc(x: number): number {
+  const t    = 1 / (1 + 0.3275911 * x);
+  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+  return poly * Math.exp(-x * x);
+}
+
+/** z-값 → 양측 p-값 (우연히 이만큼 튈 확률) */
+export function pValue(z: number): number {
+  return erfc(Math.abs(z) / Math.sqrt(2));
+}
+
+/** p-값 → 퍼센트 문자열 */
+export function fmtPValue(p: number): string {
+  const pct = p * 100;
+  if (pct < 0.001)  return '<0.001%';
+  if (pct < 0.1)    return `${pct.toFixed(3)}%`;
+  if (pct < 1)      return `${pct.toFixed(2)}%`;
+  return `${pct.toFixed(1)}%`;
+}
+
 /**
  * 슬라이더 조작 시 잠금되지 않은 나머지 정당 비율을 비례 재조정하여 합계 100 유지
  * locked[i] === true 인 정당은 값을 고정

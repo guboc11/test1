@@ -31,9 +31,9 @@ interface Props {
   showLegend?: boolean;
 }
 
-const COMPETITIVE_THRESHOLD = 0.03;
+const COMPETITIVE_THRESHOLD = 0.01;
 const TOOLTIP_W = 190;
-const TOOLTIP_H = 160; // rough max height estimate
+const TOOLTIP_H = 160;
 
 function analyzeRegion(rates: number[]) {
   const sorted = rates
@@ -185,7 +185,7 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
                 stroke="#fff"
                 strokeWidth="1.5"
                 style={{ cursor: 'pointer' }}
-                onMouseEnter={(e) => setHover({ x: e.clientX, y: e.clientY, nameKr, rates, count })}
+                onMouseEnter={(e) => setHover({ x: e.clientX, y: e.clientY, nameKr: isCompetitive ? `${nameKr} (경합중)` : nameKr, rates, count })}
                 onMouseMove={(e)  => setHover((prev) => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev)}
               />
             </g>
