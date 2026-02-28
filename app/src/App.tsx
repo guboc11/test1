@@ -103,8 +103,8 @@ function InfoDialog({ dialogRef }: { dialogRef: React.RefObject<HTMLDialogElemen
               <span className="layer-num">4</span>
               <div>
                 <strong>변심</strong>
-                <p>사전·본 투표 구분 없이, 투표 당일 <em>변심할 확률</em> s로 지지 정당 대신 무작위 정당을 선택합니다.<br />
-                실제 투표 확률 = <code>(1−s)·p<sub>i</sub> + s·(1/5)</code></p>
+                <p>사전·본 투표 구분 없이, <em>변심할 확률</em> s로 지지 정당 대신 무작위 정당을 선택합니다.<br />
+                실제 투표 확률 = <code>(1−s)·p<sub>i</sub> + s·(1/N)</code> <em>(N = 정당 수)</em></p>
               </div>
             </div>
           </div>
@@ -117,15 +117,60 @@ function InfoDialog({ dialogRef }: { dialogRef: React.RefObject<HTMLDialogElemen
         <section className="info-section">
           <h3>변심율 공식</h3>
           <p>
-            사전·본 투표 모두, 투표 당일 확률 <em>s</em>로 원래 지지 정당 대신 다른 정당을 선택합니다.<br />
-            변심율 <em>s</em>를 적용한 실제 투표 확률:
+            사전·본 투표 모두 동일하게 확률 <em>s</em>로 원래 지지 정당 대신 다른 정당을 균등 확률로 선택합니다.<br />
+            변심율 <em>s</em>를 적용한 실제 투표 확률 (N = 활성 정당 수):
           </p>
           <div className="info-formula">
-            P<sub>투표</sub>(i) = (1 − s) × p<sub>i</sub> + s × 1/5
+            P<sub>투표</sub>(i) = (1 − s) × p<sub>i</sub> + s × 1/N
           </div>
           <p className="info-note">
-            s = 0이면 지지율 그대로 반영. s가 클수록 모든 정당이 20%로 회귀합니다.<br />
+            s = 0이면 지지율 그대로 반영. s가 클수록 모든 정당이 균등 비율(1/N)로 회귀합니다.<br />
             사전·본 투표 모두 동일한 확률 구조이므로, 두 결과의 차이는 순전히 표본 크기 차이에서 비롯됩니다.
+          </p>
+        </section>
+
+        <section className="info-section">
+          <h3>정당 설정</h3>
+          <p>
+            2~5개 정당을 활성화하고 각 정당의 지지율 슬라이더를 조정할 수 있습니다.
+            합계가 항상 100%가 되도록 나머지 정당 비율이 자동으로 재조정되며,
+            특정 정당을 <em>잠금</em>하면 해당 정당의 비율은 고정됩니다.
+            <em>🎲 랜덤 설정</em> 버튼으로 지지율·투표율·인구를 한 번에 무작위로 설정할 수 있습니다.
+          </p>
+        </section>
+
+        <section className="info-section">
+          <h3>지역별 정당 지지율</h3>
+          <p>
+            17개 시도별로 전국 지지율과 다른 커스텀 지지율을 설정할 수 있습니다.
+            따로 설정하지 않은 지역은 전국 지지율을 그대로 따릅니다.
+            전체 결과는 각 지역의 실제 투표자 수를 가중치로 합산하여 계산됩니다.
+            지역별 결과는 하단의 <em>지역별 지도</em>에서 확인할 수 있습니다.
+          </p>
+        </section>
+
+        <section className="info-section">
+          <h3>실제 선거 데이터</h3>
+          <p>
+            <em>실제 선거 데이터</em> 버튼으로 실제 선거 결과를 불러올 수 있습니다.
+            지원 선거: 16~21대 대통령 선거, 19~22대 국회의원 선거(비례·지역구).
+            사전 투표 데이터가 있는 선거는 사전/본 투표 결과를 모두 표시하며,
+            없는 선거는 본 투표 결과만 표시됩니다.
+          </p>
+        </section>
+
+        <section className="info-section">
+          <h3>통계적 유의성 분석</h3>
+          <p>
+            시뮬레이션 또는 실제 선거 결과에서 사전 투표와 본 투표의 분포 차이를 통계적으로 검정합니다.
+          </p>
+          <ul className="info-libs">
+            <li><strong>χ² 검정</strong> — 전체 정당 분포의 동질성 검정. p ≥ 5%이면 두 표본이 같은 모집단에서 나왔다고 볼 수 있음</li>
+            <li><strong>z 검정</strong> — 정당별 사전/본 득표율 차이 검정. |z| &lt; 1.96 = 정상, 1.96–2.58 = 주의, ≥ 2.58 = 비정상</li>
+            <li><strong>p 값</strong> — 우연히 이만큼의 차이가 발생할 확률. ≥ 5%이면 정상 범위</li>
+          </ul>
+          <p className="info-note">
+            인구가 크면 아주 작은 차이도 유의하게 나올 수 있습니다. 수치보다 맥락을 함께 보세요.
           </p>
         </section>
 
