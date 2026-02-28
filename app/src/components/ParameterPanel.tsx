@@ -300,8 +300,31 @@ export default function ParameterPanel({ params, onChange, onRun, onShowReal }: 
   // inactive 슬롯(i >= partyCount)은 잠금 처리
   const effectiveLocked = (i: number) => locked[i] || i >= params.partyCount;
 
-  const setPartyRate = (index: number) => (v: number) =>
-    onChange({ ...params, partyRates: adjustPartyRates(params.partyRates, index, v, locked.map((l, i) => l || i >= params.partyCount)) });
+  const setPartyRate = (index: number) => (v: number) => {
+    const newRates    = adjustPartyRates(params.partyRates, index, v, locked.map((l, i) => l || i >= params.partyCount));
+    const deltas      = newRates.map((r, i) => r - params.partyRates[i]);
+
+    // 지역별 커스텀 비율도 같은 델타만큼 이동 후 클램핑·정규화
+    const newRegionPartyRates: Record<string, number[]> = {};
+    for (const [rid, regionRates] of Object.entries(params.regionPartyRates)) {
+      const lk      = (lockedRegion[rid] ?? Array(5).fill(false)).map((l: boolean, i: number) => l || i >= params.partyCount);
+      const shifted = regionRates.map((r, i) => (lk[i] ? r : Math.max(0, r + deltas[i])));
+      // 합계가 100이 되도록 자유 슬롯 비례 정규화
+      const lockedSum = shifted.reduce((s, r, i) => (lk[i] ? s + r : s), 0);
+      const freeSum   = shifted.reduce((s, r, i) => (lk[i] ? s : s + r), 0);
+      const target    = Math.max(0, 100 - lockedSum);
+      const normalized = shifted.map((r, i) =>
+        lk[i] ? r : (freeSum > 0 ? parseFloat(((r / freeSum) * target).toFixed(1)) : target / shifted.filter((_, j) => !lk[j]).length),
+      );
+      // 반올림 오차 보정
+      const diff = parseFloat((100 - normalized.reduce((s, v) => s + v, 0)).toFixed(1));
+      const firstFree = normalized.findIndex((_, i) => !lk[i]);
+      if (firstFree >= 0) normalized[firstFree] = parseFloat((normalized[firstFree] + diff).toFixed(1));
+      newRegionPartyRates[rid] = normalized;
+    }
+
+    onChange({ ...params, partyRates: newRates, regionPartyRates: newRegionPartyRates });
+  };
 
   const toggleLock = (index: number) => () => {
     if (appliedElection) { releaseDialogRef.current?.showModal(); return; }
