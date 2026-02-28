@@ -10,16 +10,219 @@
   margin-bottom: 2rem;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .app-header h1 {
   font-size: 1.8rem;
   font-weight: 700;
   color: #1a1a2e;
 }
 
+.info-btn {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.info-btn:hover {
+  background: #dbeafe;
+}
+
 .subtitle {
   margin-top: 0.5rem;
   color: #64748b;
   font-size: 0.95rem;
+}
+
+/* ── Info Dialog ────────────────────────── */
+.info-dialog {
+  border: none;
+  border-radius: 16px;
+  padding: 0;
+  max-width: 580px;
+  width: 90%;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.18);
+  max-height: 85vh;
+  overflow: hidden;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.info-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+}
+
+.info-dialog-inner {
+  overflow-y: auto;
+  max-height: 85vh;
+  padding: 1.75rem;
+}
+
+.info-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.info-dialog-header h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.dialog-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.dialog-close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.info-section {
+  margin-bottom: 1.5rem;
+}
+
+.info-section h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.info-section p {
+  font-size: 0.88rem;
+  color: #4b5563;
+  line-height: 1.65;
+}
+
+.info-section em {
+  font-style: normal;
+  color: #2563eb;
+  font-weight: 500;
+}
+
+.info-section code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.82rem;
+  background: #f1f5f9;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  color: #1e40af;
+}
+
+.info-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.info-layer {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.layer-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.1rem;
+}
+
+.info-layer strong {
+  display: block;
+  font-size: 0.88rem;
+  color: #1a1a2e;
+  margin-bottom: 0.2rem;
+}
+
+.info-layer p {
+  margin: 0;
+  font-size: 0.83rem;
+}
+
+.info-note {
+  margin-top: 0.6rem !important;
+  font-size: 0.82rem !important;
+  color: #6b7280 !important;
+  background: #f8fafc;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border-left: 3px solid #bfdbfe;
+}
+
+.info-formula {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.9rem;
+  background: #f1f5f9;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  color: #1e40af;
+  margin: 0.6rem 0;
+  text-align: center;
+}
+
+.info-libs {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.info-libs li {
+  font-size: 0.88rem;
+  color: #4b5563;
+  padding: 0.35rem 0.6rem;
+  background: #f8fafc;
+  border-radius: 6px;
+}
+
+.info-libs li strong {
+  color: #1a1a2e;
+}
+
+.info-libs li em {
+  font-style: normal;
+  font-size: 0.78rem;
+  color: #9ca3af;
 }
 
 /* ── Panel ──────────────────────────────── */

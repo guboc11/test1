@@ -21,21 +21,17 @@ function simulateCount(n: number, p: number): number {
 }
 
 /**
- * 다항 분포 정규 근사 (대수의 법칙 핵심)
- * 각 정당을 독립 정규분포로 근사 후 정규화
- * 표준편차 = sqrt(p*(1-p)/n) → n이 클수록 실제 p에 수렴
+ * 정당 득표 시뮬레이션
+ * 정당 지지율 = 유권자 1명이 해당 정당을 선택할 확률 (개인 수준 확률)
+ * 각 정당별로 simulateCount를 적용 → 투표 참여·사전투표 확률과 동일한 방식
+ * 정당 A 득표 수 ~ B(n, p_A), 정당 B 득표 수 ~ B(n, p_B), ...
+ * 합산 후 정규화하여 득표율 반환
  */
-function simulateMultinomial(n: number, probs: number[]): number[] {
+function simulatePartyVotes(n: number, probs: number[]): number[] {
   if (n <= 0) return probs;
-
-  const raw = probs.map((p) => {
-    const std = Math.sqrt((p * (1 - p)) / n);
-    return Math.max(0, p + randn() * std);
-  });
-
-  const total = raw.reduce((s, v) => s + v, 0);
-  if (total === 0) return probs;
-  return raw.map((v) => v / total);
+  const counts = probs.map((p) => simulateCount(n, p));
+  const total  = counts.reduce((s, v) => s + v, 0);
+  return total === 0 ? probs : counts.map((v) => v / total);
 }
 
 /**
@@ -87,16 +83,16 @@ export function runSimulation(params: SimulationParams): SimulationResult {
     return {
       id:             r.id,
       nameKr:         r.nameKr,
-      earlyVoteRates: simulateMultinomial(earlyCount, earlyProbs),
-      mainVoteRates:  simulateMultinomial(mainCount,  mainProbs),
+      earlyVoteRates: simulatePartyVotes(earlyCount, earlyProbs),
+      mainVoteRates:  simulatePartyVotes(mainCount,  mainProbs),
       earlyVoteCount: earlyCount,
       mainVoteCount:  mainCount,
     };
   });
 
   return {
-    earlyVoteRates: simulateMultinomial(earlyTotal, earlyProbs),
-    mainVoteRates:  simulateMultinomial(mainTotal,  mainProbs),
+    earlyVoteRates: simulatePartyVotes(earlyTotal, earlyProbs),
+    mainVoteRates:  simulatePartyVotes(mainTotal,  mainProbs),
     earlyVoteTotal: earlyTotal,
     mainVoteTotal:  mainTotal,
     regions,
