@@ -28,7 +28,7 @@ function simulateCount(n: number, p: number): number {
  * 합산 후 정규화하여 득표율 반환
  */
 function simulatePartyVotes(n: number, probs: number[]): number[] {
-  if (n <= 0) return probs;
+  if (n <= 0) return Array(probs.length).fill(0);
   const counts = probs.map((p) => simulateCount(n, p));
   const total  = counts.reduce((s, v) => s + v, 0);
   return total === 0 ? probs : counts.map((v) => v / total);
@@ -36,11 +36,15 @@ function simulatePartyVotes(n: number, probs: number[]): number[] {
 
 /**
  * 변심율 적용: switchRate% 확률로 무작위 정당으로 이탈
- * mainProbs[i] = (1 - s) * earlyProbs[i] + s * (1/N)
+ * mainProbs[i] = (1 - s) * earlyProbs[i] + s * (1/partyCount)
+ * inactive 슬롯(i >= partyCount)은 0으로 고정
  */
-function applySwitch(probs: number[], switchRate: number): number[] {
+function applySwitch(probs: number[], switchRate: number, partyCount: number): number[] {
   const s = switchRate / 100;
-  return probs.map((p) => (1 - s) * p + s * (1 / NUM_PARTIES));
+  return probs.map((p, i) => {
+    if (i >= partyCount) return 0;
+    return (1 - s) * p + s * (1 / partyCount);
+  });
 }
 
 // 출처: 행정안전부 주민등록인구 (2026년 1월 기준)
@@ -69,7 +73,7 @@ function computeWeightedRates(regions: RegionResult[], view: 'early' | 'main'): 
   const totalCount = regions.reduce(
     (s, r) => s + (view === 'early' ? r.earlyVoteCount : r.mainVoteCount), 0,
   );
-  if (totalCount === 0) return Array(NUM_PARTIES).fill(1 / NUM_PARTIES);
+  if (totalCount === 0) return Array(NUM_PARTIES).fill(0);
   return Array(NUM_PARTIES).fill(0).map((_, p) =>
     regions.reduce((s, r) => {
       const count = view === 'early' ? r.earlyVoteCount : r.mainVoteCount;
@@ -80,11 +84,11 @@ function computeWeightedRates(regions: RegionResult[], view: 'early' | 'main'): 
 }
 
 export function runSimulation(params: SimulationParams): SimulationResult {
-  const { totalPopulation, partyRates, voterTurnout, earlyVoteRatio, switchRate } = params;
+  const { totalPopulation, partyRates, voterTurnout, earlyVoteRatio, switchRate, partyCount } = params;
 
   const trueProbs   = partyRates.map((r) => r / 100);
   // 변심율: 사전·본 투표 구분 없이 투표 당일 s 확률로 다른 정당 선택
-  const votingProbs = applySwitch(trueProbs, switchRate);
+  const votingProbs = applySwitch(trueProbs, switchRate, partyCount);
 
   // 각 개인이 독립적으로 투표 여부를 결정 → 실제 투표자 수가 매번 달라짐
   const totalVoters = simulateCount(totalPopulation, voterTurnout / 100);
@@ -97,7 +101,7 @@ export function runSimulation(params: SimulationParams): SimulationResult {
     // 지역별 커스텀 지지율이 있으면 사용, 없으면 전국 지지율 사용
     const customRates = params.regionPartyRates[r.id];
     const regionProbs = customRates
-      ? applySwitch(customRates.map((v) => v / 100), switchRate)
+      ? applySwitch(customRates.map((v) => v / 100), switchRate, partyCount)
       : votingProbs;
     const earlyCount = simulateCount(earlyTotal, w);
     const mainCount  = simulateCount(mainTotal,  w);

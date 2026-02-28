@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { PARTY_COLORS, PARTY_LABELS, adjustPartyRates } from '../types';
+import { PARTY_COLORS, PARTY_LABELS, adjustPartyRates, partyDisplayName } from '../types';
 import type { SimulationParams } from '../types';
 import { REGION_DATA } from '../simulation';
+import { ELECTION_DATASETS } from '../data/electionData';
+import type { ElectionDataset } from '../data/electionData';
 
 interface Props {
   params: SimulationParams;
   onChange: (p: SimulationParams) => void;
   onRun: () => void;
+  onShowReal: (election: ElectionDataset) => void;
 }
 
 interface Tick {
@@ -28,11 +31,12 @@ interface SliderProps {
   editable?: boolean;
   scale?: 'linear' | 'log';
   ticks?: Tick[];
+  noThumb?: boolean;
   onLockToggle?: () => void;
   onChange: (v: number) => void;
 }
 
-function Slider({ label, value, min, max, step = 1, unit = '%', decimals, note, color, locked, editable, scale = 'linear', ticks, onLockToggle, onChange }: SliderProps) {
+function Slider({ label, value, min, max, step = 1, unit = '%', decimals, note, color, locked, editable, scale = 'linear', ticks, noThumb, onLockToggle, onChange }: SliderProps) {
   const isLog = scale === 'log';
   const [draft, setDraft] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -115,7 +119,12 @@ function Slider({ label, value, min, max, step = 1, unit = '%', decimals, note, 
         max={sMax}
         step={sStep}
         value={sValue}
-        disabled={locked}
+        disabled={locked || noThumb}
+        className={noThumb ? 'no-thumb' : undefined}
+        style={{
+          '--fill-pct': `${((sValue - sMin) / (sMax - sMin)) * 100}%`,
+          ...(color ? { '--party-color': color } : {}),
+        } as React.CSSProperties}
         onChange={(e) => onChange(fromSlider(e.target.value))}
       />
       {ticks && ticks.length > 0 && (
@@ -138,21 +147,54 @@ function Slider({ label, value, min, max, step = 1, unit = '%', decimals, note, 
   );
 }
 
-function randomizeRegionRates(globalRates: number[]): number[] {
+function randomizeRegionRates(globalRates: number[], partyCount: number): number[] {
   const STRENGTH = 0.9;
-  const base  = globalRates.map((r) => Math.log(Math.max(r, 0.5)));
+  const active = globalRates.slice(0, partyCount);
+  const base  = active.map((r) => Math.log(Math.max(r, 0.5)));
   const noisy = base.map((v) => v + (Math.random() * 2 - 1) * STRENGTH);
   const exp   = noisy.map((v) => Math.exp(v));
   const sum   = exp.reduce((s, v) => s + v, 0);
   const raw   = exp.map((v) => Math.round((v / sum * 100) * 10) / 10);
-  // 합계 100 보정
   const diff  = parseFloat((100 - raw.reduce((s, v) => s + v, 0)).toFixed(1));
   raw[0]      = parseFloat((raw[0] + diff).toFixed(1));
-  return raw;
+  return [...raw, ...Array(5 - partyCount).fill(0)];
 }
 
-const POPULATION_MAX     = 51_000_000;
-const POPULATION_VOTER_MAX = 44_251_919; // 2024년 제22대 국회의원선거 선거인수
+/** 선거 데이터를 SimulationParams에 적용 */
+function buildElectionParams(election: ElectionDataset, base: SimulationParams): SimulationParams {
+  const n = election.parties.length;
+  // nationalRate 합산 보정
+  const rawRates = election.parties.map((p) => p.nationalRate);
+  const sum      = rawRates.reduce((s, v) => s + v, 0);
+  const rates    = rawRates.map((r) => parseFloat((r / sum * 100).toFixed(1)));
+  const diff     = parseFloat((100 - rates.reduce((s, v) => s + v, 0)).toFixed(1));
+  rates[0]       = parseFloat((rates[0] + diff).toFixed(1));
+
+  const partyRates  = [...rates, ...Array(5 - n).fill(0)];
+  const partyLabels = [...election.parties.map((p) => p.name), ...Array.from(PARTY_LABELS).slice(n)];
+  const partyColors = [...election.parties.map((p) => p.color), ...Array.from(PARTY_COLORS).slice(n)];
+
+  // 지역별 비율은 이미 n개 원소. 5개로 패딩
+  const regionPartyRates: Record<string, number[]> = {};
+  for (const [rid, rr] of Object.entries(election.regionRates)) {
+    regionPartyRates[rid] = [...rr, ...Array(5 - rr.length).fill(0)];
+  }
+
+  // 실제 투표 통계 적용
+  const voterTotal      = election.earlyTotal + election.mainTotal;
+  const voterTurnout    = election.electorateTotal > 0
+    ? Math.min(100, Math.max(1, Math.round(voterTotal / election.electorateTotal * 100)))
+    : base.voterTurnout;
+  const earlyVoteRatio  = election.earlyTotal > 0
+    ? Math.min(99, Math.max(1, Math.round(election.earlyTotal / voterTotal * 100)))
+    : 0;
+  const totalPopulation = Math.min(election.electorateTotal || voterTotal, POPULATION_VOTER_MAX);
+
+  return { ...base, partyRates, partyLabels, partyColors, partyCount: n, regionPartyRates, voterTurnout, earlyVoteRatio, totalPopulation, switchRate: 0 };
+}
+
+const POPULATION_MAX       = 51_000_000;
+const POPULATION_VOTER_MAX = 44_251_919;
 const POPULATION_TICKS: Tick[] = [
   { value: 100_000,    label: '10만'   },
   { value: 1_000_000,  label: '100만'  },
@@ -160,8 +202,76 @@ const POPULATION_TICKS: Tick[] = [
   { value: 44_251_919, label: '4425만' },
 ];
 
-export default function ParameterPanel({ params, onChange, onRun }: Props) {
+type ElectionType = 'presidential' | 'assembly-pr' | 'assembly-district';
+const ELECTION_TYPE_LABELS: Record<ElectionType, string> = {
+  'presidential':      '대선',
+  'assembly-pr':       '총선 비례',
+  'assembly-district': '총선 지역구',
+};
+
+function ElectionModal({
+  dialogRef,
+  onApply,
+}: {
+  dialogRef: React.RefObject<HTMLDialogElement | null>;
+  onApply: (election: ElectionDataset) => void;
+}) {
+  const [activeType, setActiveType] = useState<ElectionType>('presidential');
+  const types: ElectionType[] = ['presidential', 'assembly-pr', 'assembly-district'];
+  const filtered = ELECTION_DATASETS.filter((e) => e.type === activeType)
+    .sort((a, b) => b.year - a.year);
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className="election-dialog"
+      onClick={(e) => { if (e.target === e.currentTarget) dialogRef.current?.close(); }}
+    >
+      <div className="election-dialog-inner">
+        <div className="election-dialog-header">
+          <h2>선거 데이터 선택</h2>
+          <button className="dialog-close-btn" onClick={() => dialogRef.current?.close()}>✕</button>
+        </div>
+
+        <div className="election-type-tabs">
+          {types.map((t) => (
+            <button
+              key={t}
+              className={`election-type-tab${activeType === t ? ' active' : ''}`}
+              onClick={() => setActiveType(t)}
+            >
+              {ELECTION_TYPE_LABELS[t]}
+            </button>
+          ))}
+        </div>
+
+        <div className="election-list">
+          {filtered.map((election) => (
+            <button
+              key={election.id}
+              className="election-item"
+              onClick={() => { onApply(election); dialogRef.current?.close(); }}
+            >
+              <div className="election-item-name">{election.name}</div>
+              <div className="election-item-parties">
+                {election.parties.map((p) => (
+                  <span key={p.name} className="election-item-party">
+                    <span className="election-item-dot" style={{ background: p.color }} />
+                    {p.name} {p.nationalRate}%
+                  </span>
+                ))}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+export default function ParameterPanel({ params, onChange, onRun, onShowReal }: Props) {
   const [locked, setLocked] = useState<boolean[]>(Array(5).fill(false));
+  const [appliedElection, setAppliedElection] = useState<ElectionDataset | null>(null);
   const [showFloating, setShowFloating] = useState(false);
   const [showAdv, setShowAdv] = useState(false);
   const [activeRegionId, setActiveRegionId] = useState(REGION_DATA[0].id);
@@ -170,6 +280,8 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
   );
   const runBtnRef         = useRef<HTMLButtonElement>(null);
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
+  const electionDialogRef = useRef<HTMLDialogElement>(null);
+  const releaseDialogRef  = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     const el = runBtnRef.current;
@@ -182,20 +294,25 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
     return () => observer.disconnect();
   }, []);
 
-  const set = (key: keyof Omit<SimulationParams, 'partyRates'>) => (v: number) =>
+  const set = (key: keyof Omit<SimulationParams, 'partyRates' | 'partyLabels' | 'partyColors' | 'partyCount' | 'regionPartyRates'>) => (v: number) =>
     onChange({ ...params, [key]: v });
 
-  const setPartyRate = (index: number) => (v: number) =>
-    onChange({ ...params, partyRates: adjustPartyRates(params.partyRates, index, v, locked) });
+  // inactive 슬롯(i >= partyCount)은 잠금 처리
+  const effectiveLocked = (i: number) => locked[i] || i >= params.partyCount;
 
-  const toggleLock = (index: number) => () =>
+  const setPartyRate = (index: number) => (v: number) =>
+    onChange({ ...params, partyRates: adjustPartyRates(params.partyRates, index, v, locked.map((l, i) => l || i >= params.partyCount)) });
+
+  const toggleLock = (index: number) => () => {
+    if (appliedElection) { releaseDialogRef.current?.showModal(); return; }
     setLocked((prev) => prev.map((v, i) => (i === index ? !v : v)));
+  };
 
   const totalCheck = Math.round(params.partyRates.reduce((s, v) => s + v, 0));
 
   const setRegionRate = (regionId: string, index: number, v: number) => {
     const current = params.regionPartyRates[regionId] ?? params.partyRates;
-    const lk      = lockedRegion[regionId] ?? Array(5).fill(false);
+    const lk      = (lockedRegion[regionId] ?? Array(5).fill(false)).map((l: boolean, i: number) => l || i >= params.partyCount);
     onChange({
       ...params,
       regionPartyRates: {
@@ -206,9 +323,10 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
   };
 
   const toggleRegionLock = (regionId: string, index: number) => {
+    if (appliedElection) { releaseDialogRef.current?.showModal(); return; }
     setLockedRegion((prev) => ({
       ...prev,
-      [regionId]: (prev[regionId] ?? Array(5).fill(false)).map((v, i) => (i === index ? !v : v)),
+      [regionId]: (prev[regionId] ?? Array(5).fill(false)).map((v: boolean, i: number) => (i === index ? !v : v)),
     }));
   };
 
@@ -227,10 +345,98 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
     onChange({
       ...params,
       regionPartyRates: Object.fromEntries(
-        REGION_DATA.map((r) => [r.id, randomizeRegionRates(params.partyRates)]),
+        REGION_DATA.map((r) => [r.id, randomizeRegionRates(params.partyRates, params.partyCount)]),
       ),
     });
   };
+
+  const handleRandomize = () => {
+    // 정당 지지율: 로그-정규 노이즈로 합계 100% 유지
+    const raw  = Array(5).fill(0).map(() => Math.exp(Math.random() * 2.5 - 1.25));
+    const sum  = raw.reduce((s, v) => s + v, 0);
+    const rates = raw.map((v) => parseFloat((v / sum * 100).toFixed(1)));
+    const diff  = parseFloat((100 - rates.reduce((s, v) => s + v, 0)).toFixed(1));
+    rates[0]    = parseFloat((rates[0] + diff).toFixed(1));
+
+    // 투표 설정
+    const voterTurnout   = Math.round(40 + Math.random() * 45);        // 40–85%
+    const earlyVoteRatio = Math.round(10 + Math.random() * 40);        // 10–50%
+    const switchRate     = parseFloat((Math.random() * 5).toFixed(1)); // 0–5%
+
+    // 전체 인구: 로그-균등 분포
+    const logMin        = Math.log10(10_000);
+    const logMax        = Math.log10(POPULATION_VOTER_MAX);
+    const totalPopulation = Math.round(Math.pow(10, logMin + Math.random() * (logMax - logMin)));
+
+    // 지역별 지지율
+    const regionPartyRates = Object.fromEntries(
+      REGION_DATA.map((r) => [r.id, randomizeRegionRates(rates, 5)]),
+    );
+
+    setLocked(Array(5).fill(false));
+    setLockedRegion(Object.fromEntries(REGION_DATA.map((r) => [r.id, Array(5).fill(false)])));
+    onChange({ ...params, partyRates: rates, voterTurnout, earlyVoteRatio, switchRate, totalPopulation, regionPartyRates });
+  };
+
+  const handleApplyElection = (election: ElectionDataset) => {
+    const n = election.parties.length;
+    setLocked(Array(5).fill(false).map((_, i) => i < n));
+    setLockedRegion(Object.fromEntries(REGION_DATA.map((r) => [r.id, Array(5).fill(false).map((_, i) => i < n)])));
+    setAppliedElection(election);
+    onChange(buildElectionParams(election, params));
+    onShowReal(election);
+  };
+
+  // "기본값으로" 버튼: A~E 완전 초기화
+  const handleResetToDefaults = () => {
+    setLocked(Array(5).fill(false));
+    setLockedRegion(Object.fromEntries(REGION_DATA.map((r) => [r.id, Array(5).fill(false)])));
+    setAppliedElection(null);
+    onChange({
+      ...params,
+      partyLabels: ['A', 'B', 'C', 'D', 'E'],
+      partyColors: Array.from(PARTY_COLORS),
+      partyCount: 5,
+      partyRates: [20, 20, 20, 20, 20],
+      regionPartyRates: {},
+    });
+  };
+
+  // "해제하고 수정" 버튼: 이름·색깔만 A~E 초기화, 지지율·투표 수치는 그대로 유지
+  const handleReleaseElection = () => {
+    setLocked(Array(5).fill(false));
+    setLockedRegion(Object.fromEntries(REGION_DATA.map((r) => [r.id, Array(5).fill(false)])));
+    setAppliedElection(null);
+    onChange({
+      ...params,
+      partyLabels: ['A', 'B', 'C', 'D', 'E'],
+      partyColors: Array.from(PARTY_COLORS),
+      partyCount: 5,
+    });
+  };
+
+
+  const partySliders = (
+    <div className="party-grid">
+      {Array.from({ length: params.partyCount }).map((_, i) => (
+        <Slider
+          key={i}
+          label={partyDisplayName(params.partyLabels[i])}
+          value={parseFloat(params.partyRates[i].toFixed(1))}
+          min={0}
+          max={100}
+          step={0.1}
+          decimals={1}
+          editable
+          color={params.partyColors[i]}
+          locked={effectiveLocked(i)}
+          noThumb={!!appliedElection}
+          onLockToggle={toggleLock(i)}
+          onChange={setPartyRate(i)}
+        />
+      ))}
+    </div>
+  );
 
   const formContent = (
     <>
@@ -239,45 +445,40 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
         <span className={`total-badge ${totalCheck === 100 ? 'ok' : 'err'}`}>
           합계 {totalCheck}%
         </span>
+        {!appliedElection && (
+          <>
+            <button className="randomize-inline-btn" onClick={handleRandomize}>
+              🎲 랜덤 설정
+            </button>
+            <button className="reset-election-inline-btn" onClick={handleResetToDefaults}>
+              기본값으로
+            </button>
+          </>
+        )}
       </div>
-      <div className="party-grid">
-        {PARTY_LABELS.map((label, i) => (
-          <Slider
-            key={label}
-            label={`${label}당`}
-            value={parseFloat(params.partyRates[i].toFixed(1))}
-            min={0}
-            max={100}
-            step={0.1}
-            decimals={1}
-            editable
-            color={PARTY_COLORS[i]}
-            locked={locked[i]}
-            onLockToggle={toggleLock(i)}
-            onChange={setPartyRate(i)}
-          />
-        ))}
-      </div>
+      {partySliders}
 
       <div className="section-label" style={{ marginTop: '1.2rem' }}>투표 설정</div>
       <div className="param-grid">
-        <Slider label="투표 참여 확률"  value={params.voterTurnout}   min={1} max={100} onChange={set('voterTurnout')} />
-        <Slider label="사전 투표 확률" value={params.earlyVoteRatio} min={1} max={99}  onChange={set('earlyVoteRatio')} />
-        <Slider label="변심할 확률"    value={params.switchRate}     min={0} max={10}  onChange={set('switchRate')} />
+        <Slider label={appliedElection ? '투표율'           : '투표 참여 확률'} value={params.voterTurnout}   min={1} max={100} locked={!!appliedElection} noThumb={!!appliedElection} onChange={set('voterTurnout')} />
+        <Slider label={appliedElection ? '실제 사전 투표율' : '사전 투표 확률'} value={params.earlyVoteRatio} min={1} max={99}  locked={!!appliedElection} noThumb={!!appliedElection} onChange={set('earlyVoteRatio')} />
+        <Slider label="변심할 확률" value={params.switchRate} min={0} max={10} locked={!!appliedElection} noThumb={!!appliedElection} onChange={set('switchRate')} />
         <Slider
-          label="전체 인구"
+          label={appliedElection ? '투표자 수' : '전체 인구'}
           value={params.totalPopulation}
           min={10_000}
           max={POPULATION_MAX}
           unit="명"
           scale="log"
           ticks={POPULATION_TICKS}
+          locked={!!appliedElection}
+          noThumb={!!appliedElection}
           onChange={(v) => set('totalPopulation')(Math.min(v, POPULATION_VOTER_MAX))}
         />
       </div>
 
       <button className="adv-btn" onClick={() => setShowAdv((v) => !v)}>
-        지역별 정당 지지율 고급 설정 {showAdv ? '▲' : '▼'}
+        지역별 정당 지지율 {showAdv ? '▲' : '▼'}
       </button>
     </>
   );
@@ -285,18 +486,20 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
   const advContent = showAdv && (
     <div className="adv-inline">
       <p className="adv-desc">따로 설정하지 않은 지역은 전체 정당 지지율을 따릅니다.</p>
-      <div className="adv-action-row">
-        <button className="adv-action-btn" onClick={randomizeAllRegions}>
-          🎲 랜덤 설정
-        </button>
-        <button className="adv-action-btn" disabled title="추후 지원 예정">
-          🗺 실제 데이터 적용
-        </button>
-      </div>
+      {!appliedElection && (
+        <div className="adv-action-row">
+          <button className="adv-action-btn" onClick={randomizeAllRegions}>
+            🎲 랜덤 설정
+          </button>
+        </div>
+      )}
 
       <div className="region-tabs">
         {REGION_DATA.map((r) => {
           const isCustomized = !!params.regionPartyRates[r.id];
+          const rates        = params.regionPartyRates[r.id] ?? params.partyRates;
+          const topIdx       = rates.slice(0, params.partyCount).indexOf(Math.max(...rates.slice(0, params.partyCount)));
+          const dotColor     = params.partyColors[topIdx] ?? '#94a3b8';
           return (
             <button
               key={r.id}
@@ -304,7 +507,7 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
               onClick={() => setActiveRegionId(r.id)}
             >
               {r.nameKr}
-              {isCustomized && <span className="region-tab-dot" />}
+              <span className="region-tab-dot" style={{ background: dotColor }} />
             </button>
           );
         })}
@@ -315,7 +518,7 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
         const isCustomized = !!params.regionPartyRates[activeRegionId];
         const rates        = params.regionPartyRates[activeRegionId] ?? params.partyRates;
         const lk           = lockedRegion[activeRegionId] ?? Array(5).fill(false);
-        const total        = Math.round(rates.reduce((s, v) => s + v, 0));
+        const total        = Math.round(rates.slice(0, params.partyCount).reduce((s, v) => s + v, 0));
         return (
           <div className="adv-region-content">
             <div className="section-label">
@@ -328,24 +531,25 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
               )}
             </div>
             <div className="party-grid">
-              {PARTY_LABELS.map((label, i) => (
+              {Array.from({ length: params.partyCount }).map((_, i) => (
                 <Slider
-                  key={label}
-                  label={`${label}당`}
+                  key={i}
+                  label={partyDisplayName(params.partyLabels[i])}
                   value={parseFloat(rates[i].toFixed(1))}
                   min={0}
                   max={100}
                   step={0.1}
                   decimals={1}
                   editable
-                  color={PARTY_COLORS[i]}
-                  locked={lk[i]}
+                  color={params.partyColors[i]}
+                  locked={lk[i] || i >= params.partyCount}
+                  noThumb={!!appliedElection}
                   onLockToggle={() => toggleRegionLock(activeRegionId, i)}
                   onChange={(v) => setRegionRate(activeRegionId, i, v)}
                 />
               ))}
             </div>
-            {isCustomized && (
+            {isCustomized && !appliedElection && (
               <button className="reset-region-btn" onClick={() => resetRegion(activeRegionId)}>
                 이 지역 초기화
               </button>
@@ -354,36 +558,68 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
         );
       })()}
 
-      <div className="adv-footer">
-        <button className="adv-reset-all-btn" onClick={resetAllRegions}>
-          전체 초기화
-        </button>
-      </div>
+      {!appliedElection && (
+        <div className="adv-footer">
+          <button className="adv-reset-all-btn" onClick={resetAllRegions}>
+            전체 초기화
+          </button>
+        </div>
+      )}
     </div>
   );
 
   return (
     <>
       <div className="panel">
-        <h2>파라미터 설정</h2>
+        <div className="panel-title-row">
+          <h2>파라미터 설정</h2>
+        </div>
         {formContent}
         {advContent}
-        <button ref={runBtnRef} className="run-btn" onClick={onRun}>
-          시뮬레이션 실행
-        </button>
+        <div className="run-btn-row">
+          {appliedElection ? (
+            <>
+              <button className="sim-mode-btn" onClick={() => { handleReleaseElection(); onRun(); }}>
+                시뮬레이션 모드 전환
+              </button>
+              <button ref={runBtnRef} className="real-result-btn" onClick={() => electionDialogRef.current?.showModal()}>
+                {appliedElection.name}
+              </button>
+            </>
+          ) : (
+            <>
+              <button ref={runBtnRef} className="run-btn" onClick={onRun}>
+                시뮬레이션 실행
+              </button>
+              <button className="election-data-btn" onClick={() => electionDialogRef.current?.showModal()}>
+                실제 선거 데이터 적용하기
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {showFloating && (
         <div className="floating-btns">
-          <button
-            className="float-settings-btn"
-            onClick={() => settingsDialogRef.current?.showModal()}
-          >
-            ⚙ 설정
-          </button>
-          <button className="run-btn run-btn-floating" onClick={onRun}>
-            시뮬레이션 실행
-          </button>
+          {appliedElection ? (
+            <>
+              <button className="sim-mode-btn run-btn-floating" onClick={() => { handleReleaseElection(); onRun(); }}>
+                시뮬레이션 모드 전환
+              </button>
+              <button className="real-result-btn run-btn-floating" onClick={() => electionDialogRef.current?.showModal()}>
+                {appliedElection.name}
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="float-settings-btn" onClick={() => settingsDialogRef.current?.showModal()}>
+                ⚙ 설정
+              </button>
+              <button className="run-btn run-btn-floating" onClick={onRun}>
+                시뮬레이션 실행
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -399,13 +635,57 @@ export default function ParameterPanel({ params, onChange, onRun }: Props) {
           </div>
           {formContent}
           {advContent}
-          <button
-            className="run-btn"
-            style={{ marginTop: '1.5rem' }}
-            onClick={() => { onRun(); settingsDialogRef.current?.close(); }}
-          >
-            시뮬레이션 실행
-          </button>
+          <div className="run-btn-row" style={{ marginTop: '1.5rem' }}>
+            {appliedElection ? (
+              <>
+                <button className="sim-mode-btn" onClick={() => { handleReleaseElection(); onRun(); settingsDialogRef.current?.close(); }}>
+                  시뮬레이션 모드 전환
+                </button>
+                <button
+                  className="real-result-btn"
+                  onClick={() => { settingsDialogRef.current?.close(); electionDialogRef.current?.showModal(); }}
+                >
+                  {appliedElection.name}
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="run-btn" onClick={() => { onRun(); settingsDialogRef.current?.close(); }}>
+                  시뮬레이션 실행
+                </button>
+                <button className="election-data-btn" onClick={() => electionDialogRef.current?.showModal()}>
+                  실제 선거 데이터 적용하기
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </dialog>
+
+      <ElectionModal dialogRef={electionDialogRef} onApply={handleApplyElection} />
+
+      <dialog
+        ref={releaseDialogRef}
+        className="release-dialog"
+        onClick={(e) => { if (e.target === e.currentTarget) releaseDialogRef.current?.close(); }}
+      >
+        <div className="release-dialog-inner">
+          <p className="release-dialog-title">실제 선거 데이터가 적용되어 있습니다</p>
+          <p className="release-dialog-body">
+            수정을 계속하면 실제 데이터 적용이 해제되고<br />
+            A~E당 기본 모드로 초기화됩니다.
+          </p>
+          <div className="release-dialog-btns">
+            <button className="release-cancel-btn" onClick={() => releaseDialogRef.current?.close()}>
+              취소
+            </button>
+            <button
+              className="release-ok-btn"
+              onClick={() => { handleReleaseElection(); releaseDialogRef.current?.close(); }}
+            >
+              해제하고 수정
+            </button>
+          </div>
         </div>
       </dialog>
     </>

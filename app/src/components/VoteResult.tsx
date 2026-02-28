@@ -1,24 +1,28 @@
 import { useState } from 'react';
-import { PARTY_COLORS, PARTY_LABELS } from '../types';
+import { partyDisplayName } from '../types';
 
 interface Props {
   title: string;
-  voteRates: number[];  // [A,B,C,D,E] 합계 1
+  voteRates: number[];  // 5개, 합계 1
   total: number;
+  partyLabels: string[];
+  partyColors: string[];
+  partyCount: number;
 }
 
 const TOOLTIP_W = 190;
 const TOOLTIP_H = 160;
 
-export default function VoteResult({ title, voteRates, total }: Props) {
+export default function VoteResult({ title, voteRates, total, partyLabels, partyColors, partyCount }: Props) {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
-  const sorted = PARTY_LABELS
-    .map((label, i) => ({
-      label,
-      color: PARTY_COLORS[i],
-      rate:  voteRates[i],
-      count: Math.round(total * voteRates[i]),
+  const activeRates = voteRates.slice(0, partyCount);
+  const sorted = activeRates
+    .map((rate, i) => ({
+      label: partyLabels[i],
+      color: partyColors[i],
+      rate,
+      count: Math.round(total * rate),
     }))
     .sort((a, b) => b.rate - a.rate);
 
@@ -46,11 +50,11 @@ export default function VoteResult({ title, voteRates, total }: Props) {
         onMouseLeave={() => setPos(null)}
         style={{ cursor: 'default' }}
       >
-        {voteRates.map((rate, i) => (
+        {activeRates.map((rate, i) => (
           <div
-            key={PARTY_LABELS[i]}
+            key={partyLabels[i]}
             className="bar-segment"
-            style={{ width: `${rate * 100}%`, background: PARTY_COLORS[i] }}
+            style={{ width: `${rate * 100}%`, background: partyColors[i] }}
           />
         ))}
       </div>
@@ -62,7 +66,7 @@ export default function VoteResult({ title, voteRates, total }: Props) {
           {sorted.map((p) => (
             <div key={p.label} className="map-tooltip-row">
               <span className="map-tooltip-dot" style={{ background: p.color }} />
-              <span className="map-tooltip-party">{p.label}당</span>
+              <span className="map-tooltip-party">{partyDisplayName(p.label)}</span>
               <span className="map-tooltip-pct">{(p.rate * 100).toFixed(1)}%</span>
               <span className="map-tooltip-count">{p.count.toLocaleString()}표</span>
             </div>
@@ -71,11 +75,11 @@ export default function VoteResult({ title, voteRates, total }: Props) {
       )}
 
       <div className="bar-legend">
-        {voteRates.map((rate, i) => (
-          <div key={PARTY_LABELS[i]} className="legend-item">
-            <span className="legend-dot" style={{ background: PARTY_COLORS[i] }} />
-            <span style={{ color: PARTY_COLORS[i], fontWeight: 600 }}>
-              {PARTY_LABELS[i]}당
+        {activeRates.map((rate, i) => (
+          <div key={partyLabels[i]} className="legend-item">
+            <span className="legend-dot" style={{ background: partyColors[i] }} />
+            <span style={{ color: partyColors[i], fontWeight: 600 }}>
+              {partyDisplayName(partyLabels[i])}
             </span>
             <span className="legend-pct">{(rate * 100).toFixed(1)}%</span>
           </div>

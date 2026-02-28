@@ -2,13 +2,21 @@ export const PARTY_LABELS = ['A', 'B', 'C', 'D', 'E'] as const;
 export const PARTY_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#a855f7'] as const;
 export const NUM_PARTIES = 5;
 
+/** A–E 단일 문자이면 '당' 접미, 실제 정당명이면 그대로 반환 */
+export function partyDisplayName(label: string): string {
+  return /^[A-E]$/.test(label) ? `${label}당` : label;
+}
+
 export interface SimulationParams {
   totalPopulation: number;
-  partyRates: number[];   // 5개, 합계 100
-  voterTurnout: number;   // 0–100
-  earlyVoteRatio: number; // 0–100 (사전 투표 비율)
-  switchRate: number;     // 0–100 (변심율: 본 투표 때 무작위 정당으로 이탈)
-  regionPartyRates: Record<string, number[]>; // regionId → [A,B,C,D,E] 합계 100
+  partyRates: number[];       // 5개, 합계 100 (inactive 슬롯은 0)
+  voterTurnout: number;       // 0–100
+  earlyVoteRatio: number;     // 0–100 (사전 투표 비율)
+  switchRate: number;         // 0–100 (변심율)
+  regionPartyRates: Record<string, number[]>; // regionId → 5개 배열, 합계 100
+  partyLabels: string[];      // 5개 (inactive 슬롯은 기본 라벨 'D','E' 등)
+  partyColors: string[];      // 5개 hex color
+  partyCount: number;         // 1–5, 활성 정당 수
 }
 
 export interface RegionResult {
@@ -38,6 +46,16 @@ function erfc(x: number): number {
 /** z-값 → 양측 p-값 (우연히 이만큼 튈 확률) */
 export function pValue(z: number): number {
   return erfc(Math.abs(z) / Math.sqrt(2));
+}
+
+/** 카이제곱 분포 상위 꼬리 p-값 (Wilson-Hilferty 근사) */
+export function chiSquarePValue(chi2: number, df: number): number {
+  if (df <= 0 || chi2 <= 0) return 1;
+  const h     = 1 - 2 / (9 * df);
+  const sigma = Math.sqrt(2 / (9 * df));
+  const z     = ((chi2 / df) ** (1 / 3) - h) / sigma;
+  if (z <= 0) return 1;
+  return erfc(z / Math.sqrt(2)) / 2;
 }
 
 /** p-값 → 퍼센트 문자열 */

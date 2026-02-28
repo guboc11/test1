@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import SouthKorea from '@svg-maps/south-korea';
-import { PARTY_COLORS, PARTY_LABELS } from '../types';
+import { partyDisplayName } from '../types';
 import type { SimulationResult } from '../types';
 
 interface SvgLocation {
@@ -28,6 +28,9 @@ interface Props {
   result: SimulationResult;
   view: 'early' | 'main';
   title: string;
+  partyLabels: string[];
+  partyColors: string[];
+  partyCount: number;
   showLegend?: boolean;
 }
 
@@ -44,10 +47,10 @@ function analyzeRegion(rates: number[]) {
   return { first, second, isCompetitive: first.rate - second.rate < COMPETITIVE_THRESHOLD };
 }
 
-function getSolidColor(rates: number[]): string {
+function getSolidColor(rates: number[], partyColors: string[]): string {
   const { first } = analyzeRegion(rates);
   const opacity = 0.3 + Math.min(first.rate * 2, 1) * 0.7;
-  const hex = PARTY_COLORS[first.index];
+  const hex = partyColors[first.index];
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
@@ -62,17 +65,19 @@ function collectPatterns(
   locations: SvgLocation[],
   regionMap: Map<string, { earlyVoteRates: number[]; mainVoteRates: number[] }>,
   view: 'early' | 'main',
+  partyColors: string[],
 ): Map<string, { c1: string; c2: string }> {
   const patterns = new Map<string, { c1: string; c2: string }>();
   locations.forEach((loc) => {
     const region = regionMap.get(loc.id);
     const rates  = region ? (view === 'early' ? region.earlyVoteRates : region.mainVoteRates) : null;
-    if (!rates) return;
+    const count  = region ? (view === 'early' ? region.earlyVoteCount : region.mainVoteCount) : 0;
+    if (!rates || count === 0) return;
     const { first, second, isCompetitive } = analyzeRegion(rates);
     if (!isCompetitive) return;
     const id = patternId(first.index, second.index);
     if (!patterns.has(id)) {
-      patterns.set(id, { c1: PARTY_COLORS[first.index], c2: PARTY_COLORS[second.index] });
+      patterns.set(id, { c1: partyColors[first.index], c2: partyColors[second.index] });
     }
   });
   return patterns;
@@ -81,13 +86,14 @@ function collectPatterns(
 // "경합중" 레이블을 보여주기에 충분한 최소 너비
 const MIN_LABEL_WIDTH = 28;
 
-export default function KoreaMap({ result, view, title, showLegend = false }: Props) {
+export default function KoreaMap({ result, view, title, partyLabels, partyColors, partyCount, showLegend = false }: Props) {
   const regionMap = new Map(result.regions.map((r) => [r.id, r]));
   const locations = SouthKorea.locations as SvgLocation[];
   const patterns  = collectPatterns(
     locations,
     regionMap as Map<string, { earlyVoteRates: number[]; mainVoteRates: number[] }>,
     view,
+    partyColors,
   );
 
   const svgRef = useRef<SVGSVGElement>(null);
@@ -124,10 +130,11 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
   }
 
   const sortedParties = hover
-    ? PARTY_LABELS
+    ? partyLabels
+        .slice(0, partyCount)
         .map((label, i) => ({
           label,
-          color: PARTY_COLORS[i],
+          color: partyColors[i],
           rate:  hover.rates[i],
           count: Math.round(hover.count * hover.rates[i]),
         }))
@@ -165,16 +172,18 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
           const region = regionMap.get(loc.id);
           const rates  = region
             ? (view === 'early' ? region.earlyVoteRates : region.mainVoteRates)
-            : Array(5).fill(0.2) as number[];
+            : Array(5).fill(1 / partyCount) as number[];
           const count  = region
             ? (view === 'early' ? region.earlyVoteCount : region.mainVoteCount)
             : 0;
           const nameKr = region?.nameKr ?? loc.name;
 
           const { first, second, isCompetitive } = analyzeRegion(rates);
-          const fill = isCompetitive
-            ? `url(#${patternId(first.index, second.index)})`
-            : getSolidColor(rates);
+          const fill = count === 0
+            ? '#e5e7eb'
+            : isCompetitive
+              ? `url(#${patternId(first.index, second.index)})`
+              : getSolidColor(rates, partyColors);
 
           return (
             <g key={loc.id}>
@@ -197,11 +206,12 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
           const region = regionMap.get(loc.id);
           const rates  = region
             ? (view === 'early' ? region.earlyVoteRates : region.mainVoteRates)
-            : Array(5).fill(0.2) as number[];
+            : Array(5).fill(1 / partyCount) as number[];
 
+          const count2 = region ? (view === 'early' ? region.earlyVoteCount : region.mainVoteCount) : 0;
           const { isCompetitive } = analyzeRegion(rates);
           const center = centers.get(loc.id);
-          if (!isCompetitive || !center || center.w < MIN_LABEL_WIDTH) return null;
+          if (!isCompetitive || count2 === 0 || !center || center.w < MIN_LABEL_WIDTH) return null;
 
           const LW = 27, LH = 12, LR = 3;
           return (
@@ -239,7 +249,7 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
           {sortedParties.map((p) => (
             <div key={p.label} className="map-tooltip-row">
               <span className="map-tooltip-dot" style={{ background: p.color }} />
-              <span className="map-tooltip-party">{p.label}당</span>
+              <span className="map-tooltip-party">{partyDisplayName(p.label)}</span>
               <span className="map-tooltip-pct">{(p.rate * 100).toFixed(1)}%</span>
               <span className="map-tooltip-count">{p.count.toLocaleString()}표</span>
             </div>
@@ -249,10 +259,10 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
 
       {showLegend && (
         <div className="map-legend">
-          {PARTY_LABELS.map((label, i) => (
+          {partyLabels.slice(0, partyCount).map((label, i) => (
             <div key={label} className="map-legend-item">
-              <span className="map-legend-dot" style={{ background: PARTY_COLORS[i] }} />
-              {label}당
+              <span className="map-legend-dot" style={{ background: partyColors[i] }} />
+              {partyDisplayName(label)}
             </div>
           ))}
         </div>

@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import type { SimulationParams, SimulationResult } from './types';
-import { PARTY_COLORS, PARTY_LABELS } from './types';
-import { runSimulation } from './simulation';
+import type { SimulationParams, SimulationResult, RegionResult } from './types';
+import { partyDisplayName } from './types';
+import { runSimulation, REGION_DATA } from './simulation';
 import ParameterPanel from './components/ParameterPanel';
 import VoteResult from './components/VoteResult';
 import KoreaMap from './components/KoreaMap';
 import StatsSummary from './components/StatsSummary';
+import type { ElectionDataset } from './data/electionData';
 import './App.css';
 
 const DEFAULT_PARAMS: SimulationParams = {
@@ -15,7 +16,39 @@ const DEFAULT_PARAMS: SimulationParams = {
   earlyVoteRatio: 30,
   switchRate: 3,
   regionPartyRates: {},
+  partyLabels: ['A', 'B', 'C', 'D', 'E'],
+  partyColors: ['#3b82f6', '#ef4444', '#22c55e', '#f97316', '#a855f7'],
+  partyCount: 5,
 };
+
+function buildRealResult(election: ElectionDataset): SimulationResult {
+  const hasEarly = election.earlyTotal > 0;
+
+  const regions: RegionResult[] = REGION_DATA.map((r) => {
+    const earlyRates = hasEarly
+      ? (election.earlyRegionRates[r.id] ?? election.earlyNationalRates).map((v) => v / 100)
+      : (election.mainRegionRates[r.id]  ?? election.mainNationalRates).map((v) => v / 100);
+    const mainRates = (election.mainRegionRates[r.id] ?? election.mainNationalRates).map((v) => v / 100);
+    return {
+      id:             r.id,
+      nameKr:         r.nameKr,
+      earlyVoteRates: earlyRates,
+      mainVoteRates:  mainRates,
+      earlyVoteCount: election.earlyRegionTotals[r.id] ?? 0,
+      mainVoteCount:  election.mainRegionTotals[r.id]  ?? 0,
+    };
+  });
+
+  return {
+    earlyVoteRates: hasEarly
+      ? election.earlyNationalRates.map((v) => v / 100)
+      : election.mainNationalRates.map((v) => v / 100),
+    mainVoteRates:  election.mainNationalRates.map((v) => v / 100),
+    earlyVoteTotal: election.earlyTotal,
+    mainVoteTotal:  election.mainTotal,
+    regions,
+  };
+}
 
 function InfoDialog({ dialogRef }: { dialogRef: React.RefObject<HTMLDialogElement | null> }) {
   return (
@@ -113,10 +146,17 @@ function InfoDialog({ dialogRef }: { dialogRef: React.RefObject<HTMLDialogElemen
 export default function App() {
   const [params, setParams] = useState<SimulationParams>(DEFAULT_PARAMS);
   const [result, setResult] = useState<SimulationResult | null>(null);
+  const [resultType, setResultType] = useState<'simulation' | 'real'>('simulation');
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   function handleRun() {
     setResult(runSimulation(params));
+    setResultType('simulation');
+  }
+
+  function handleShowReal(election: ElectionDataset) {
+    setResult(buildRealResult(election));
+    setResultType('real');
   }
 
   return (
@@ -135,32 +175,51 @@ export default function App() {
 
       <InfoDialog dialogRef={dialogRef} />
 
-      <ParameterPanel params={params} onChange={setParams} onRun={handleRun} />
+      <ParameterPanel params={params} onChange={setParams} onRun={handleRun} onShowReal={handleShowReal} />
 
       {result && (
         <>
-          <StatsSummary result={result} />
+          <StatsSummary result={result} partyLabels={params.partyLabels} partyColors={params.partyColors} partyCount={params.partyCount} resultType={resultType} />
 
-          <section className="results-section">
-            <VoteResult title="사전 투표" voteRates={result.earlyVoteRates} total={result.earlyVoteTotal} />
-            <VoteResult title="본 투표"   voteRates={result.mainVoteRates}  total={result.mainVoteTotal}  />
-          </section>
+          {(() => {
+            const hideEarly = resultType === 'real' && result.earlyVoteTotal === 0;
+            return (
+              <>
+                <section className="results-section">
+                  <div style={hideEarly ? { opacity: 0.35, pointerEvents: 'none', filter: 'grayscale(1)' } : undefined}>
+                    <VoteResult
+                      title={resultType === 'real' ? '사전 투표 (실제)' : '사전 투표'}
+                      voteRates={result.earlyVoteRates} total={result.earlyVoteTotal}
+                      partyLabels={params.partyLabels} partyColors={params.partyColors} partyCount={params.partyCount}
+                    />
+                  </div>
+                  <VoteResult
+                    title={resultType === 'real' ? '본 투표 (실제)' : '본 투표'}
+                    voteRates={result.mainVoteRates}  total={result.mainVoteTotal}
+                    partyLabels={params.partyLabels} partyColors={params.partyColors} partyCount={params.partyCount}
+                  />
+                </section>
 
-          <section className="map-section">
-            <h2 className="map-section-title">지역별 결과</h2>
-            <div className="map-dual">
-              <KoreaMap result={result} view="early" title="사전 투표" />
-              <KoreaMap result={result} view="main"  title="본 투표"  />
-            </div>
-            <div className="map-legend">
-              {PARTY_LABELS.map((label, i) => (
-                <div key={label} className="map-legend-item">
-                  <span className="map-legend-dot" style={{ background: PARTY_COLORS[i] }} />
-                  {label}당
-                </div>
-              ))}
-            </div>
-          </section>
+                <section className="map-section">
+                  <h2 className="map-section-title">지역별 결과</h2>
+                  <div className="map-dual">
+                    <div style={hideEarly ? { opacity: 0.35, pointerEvents: 'none', filter: 'grayscale(1)' } : undefined}>
+                      <KoreaMap result={result} view="early" title={resultType === 'real' ? '사전 투표 (실제)' : '사전 투표'} partyLabels={params.partyLabels} partyColors={params.partyColors} partyCount={params.partyCount} />
+                    </div>
+                    <KoreaMap result={result} view="main"  title={resultType === 'real' ? '본 투표 (실제)' : '본 투표'}   partyLabels={params.partyLabels} partyColors={params.partyColors} partyCount={params.partyCount} />
+                  </div>
+                  <div className="map-legend">
+                    {params.partyLabels.slice(0, params.partyCount).map((label, i) => (
+                      <div key={label} className="map-legend-item">
+                        <span className="map-legend-dot" style={{ background: params.partyColors[i] }} />
+                        {partyDisplayName(label)}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            );
+          })()}
         </>
       )}
     </div>
