@@ -501,3 +501,62 @@ input[type='range'] {
   height: 12px;
   border-radius: 50%;
 }
+
+/* ── Map Tooltip ────────────────────────── */
+.map-tooltip {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.08);
+  padding: 0.7rem 0.9rem;
+  min-width: 190px;
+  border: 1px solid #e2e8f0;
+}
+
+.map-tooltip-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 0.15rem;
+}
+
+.map-tooltip-total {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.map-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.18rem 0;
+  font-size: 0.82rem;
+}
+
+.map-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.map-tooltip-party {
+  flex: 1;
+  color: #374151;
+}
+
+.map-tooltip-pct {
+  font-weight: 700;
+  color: #1a1a2e;
+  min-width: 40px;
+  text-align: right;
+}
+
+.map-tooltip-count {
+  color: #9ca3af;
+  font-size: 0.75rem;
+  min-width: 58px;
+  text-align: right;
+}

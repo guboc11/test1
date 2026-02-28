@@ -16,6 +16,14 @@ interface Center {
   h: number;
 }
 
+interface HoverInfo {
+  x: number;
+  y: number;
+  nameKr: string;
+  rates: number[];
+  count: number;
+}
+
 interface Props {
   result: SimulationResult;
   view: 'early' | 'main';
@@ -24,6 +32,8 @@ interface Props {
 }
 
 const COMPETITIVE_THRESHOLD = 0.03;
+const TOOLTIP_W = 190;
+const TOOLTIP_H = 160; // rough max height estimate
 
 function analyzeRegion(rates: number[]) {
   const sorted = rates
@@ -82,6 +92,7 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [centers, setCenters] = useState<Map<string, Center>>(new Map());
+  const [hover, setHover] = useState<HoverInfo | null>(null);
 
   // 마운트 후 각 지역 경로의 바운딩 박스 중심을 계산
   useEffect(() => {
@@ -100,6 +111,29 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
     setCenters(map);
   }, []); // 경로 위치는 고정이므로 마운트 시 1회만 계산
 
+  function tooltipStyle(x: number, y: number): React.CSSProperties {
+    const flipX = x + 16 + TOOLTIP_W > window.innerWidth;
+    const flipY = y + 16 + TOOLTIP_H > window.innerHeight;
+    return {
+      position: 'fixed',
+      left: flipX ? x - 12 - TOOLTIP_W : x + 16,
+      top:  flipY ? y - 12 - TOOLTIP_H : y + 16,
+      pointerEvents: 'none',
+      zIndex: 1000,
+    };
+  }
+
+  const sortedParties = hover
+    ? PARTY_LABELS
+        .map((label, i) => ({
+          label,
+          color: PARTY_COLORS[i],
+          rate:  hover.rates[i],
+          count: Math.round(hover.count * hover.rates[i]),
+        }))
+        .sort((a, b) => b.rate - a.rate)
+    : [];
+
   return (
     <div className="map-wrapper">
       <h3 className="map-title">{title}</h3>
@@ -108,6 +142,7 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
         viewBox={SouthKorea.viewBox}
         className="korea-svg"
         aria-label="대한민국 지도"
+        onMouseLeave={() => setHover(null)}
       >
         <defs>
           {Array.from(patterns.entries()).map(([id, { c1, c2 }]) => (
@@ -134,15 +169,12 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
           const count  = region
             ? (view === 'early' ? region.earlyVoteCount : region.mainVoteCount)
             : 0;
+          const nameKr = region?.nameKr ?? loc.name;
 
           const { first, second, isCompetitive } = analyzeRegion(rates);
           const fill = isCompetitive
             ? `url(#${patternId(first.index, second.index)})`
             : getSolidColor(rates);
-
-          const tooltip = isCompetitive
-            ? `${region?.nameKr ?? loc.name} — 경합 (${PARTY_LABELS[first.index]}당 ${(first.rate * 100).toFixed(1)}% vs ${PARTY_LABELS[second.index]}당 ${(second.rate * 100).toFixed(1)}%) (${count.toLocaleString()}명)`
-            : `${region?.nameKr ?? loc.name} — ${PARTY_LABELS[first.index]}당 1위 ${(first.rate * 100).toFixed(1)}% (${count.toLocaleString()}명)`;
 
           return (
             <g key={loc.id}>
@@ -152,8 +184,10 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
                 fill={fill}
                 stroke="#fff"
                 strokeWidth="1.5"
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={(e) => setHover({ x: e.clientX, y: e.clientY, nameKr, rates, count })}
+                onMouseMove={(e)  => setHover((prev) => prev ? { ...prev, x: e.clientX, y: e.clientY } : prev)}
               />
-              <title>{tooltip}</title>
             </g>
           );
         })}
@@ -196,6 +230,22 @@ export default function KoreaMap({ result, view, title, showLegend = false }: Pr
           );
         })}
       </svg>
+
+      {/* 플로팅 툴팁 */}
+      {hover && (
+        <div className="map-tooltip" style={tooltipStyle(hover.x, hover.y)}>
+          <div className="map-tooltip-title">{hover.nameKr}</div>
+          <div className="map-tooltip-total">총 {hover.count.toLocaleString()}표</div>
+          {sortedParties.map((p) => (
+            <div key={p.label} className="map-tooltip-row">
+              <span className="map-tooltip-dot" style={{ background: p.color }} />
+              <span className="map-tooltip-party">{p.label}당</span>
+              <span className="map-tooltip-pct">{(p.rate * 100).toFixed(1)}%</span>
+              <span className="map-tooltip-count">{p.count.toLocaleString()}표</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showLegend && (
         <div className="map-legend">
