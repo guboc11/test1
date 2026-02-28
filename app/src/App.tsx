@@ -192,6 +192,7 @@ export default function App() {
   const [params, setParams] = useState<SimulationParams>(DEFAULT_PARAMS);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [resultType, setResultType] = useState<'simulation' | 'real'>('simulation');
+  const [mapView, setMapView] = useState<'early' | 'main'>('early');
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   function handleRun() {
@@ -246,12 +247,30 @@ export default function App() {
                 </section>
 
                 <section className="map-section">
-                  <h2 className="map-section-title">지역별 결과</h2>
-                  <div className="map-dual">
-                    <div style={hideEarly ? { opacity: 0.35, pointerEvents: 'none', filter: 'grayscale(1)' } : undefined}>
+                  <div className="map-section-header">
+                    <h2 className="map-section-title">지역별 결과</h2>
+                    <div className="map-toggle">
+                      <button
+                        className={`map-toggle-btn${mapView === 'early' ? ' active' : ''}`}
+                        onClick={() => setMapView(v => v === 'early' ? 'main' : 'early')}
+                      >
+                        사전
+                      </button>
+                      <button
+                        className={`map-toggle-btn${mapView === 'main' ? ' active' : ''}`}
+                        onClick={() => setMapView(v => v === 'early' ? 'main' : 'early')}
+                      >
+                        본투표
+                      </button>
+                    </div>
+                  </div>
+                  <div className={`map-dual map-dual--${mapView}`}>
+                    <div className="map-view-early" style={hideEarly ? { opacity: 0.35, pointerEvents: 'none', filter: 'grayscale(1)' } : undefined}>
                       <KoreaMap result={result} view="early" title={resultType === 'real' ? '사전 투표 (실제)' : '사전 투표'} partyLabels={params.partyLabels} partyColors={params.partyColors} partyCount={params.partyCount} />
                     </div>
-                    <KoreaMap result={result} view="main"  title={resultType === 'real' ? '본 투표 (실제)' : '본 투표'}   partyLabels={params.partyLabels} partyColors={params.partyColors} partyCount={params.partyCount} />
+                    <div className="map-view-main">
+                      <KoreaMap result={result} view="main"  title={resultType === 'real' ? '본 투표 (실제)' : '본 투표'}   partyLabels={params.partyLabels} partyColors={params.partyColors} partyCount={params.partyCount} />
+                    </div>
                   </div>
                   <div className="map-legend">
                     {params.partyLabels.slice(0, params.partyCount).map((label, i) => (

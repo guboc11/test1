@@ -58,9 +58,8 @@
   max-height: 85vh;
   overflow: hidden;
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  margin: auto;
 }
 
 .info-dialog::backdrop {
@@ -786,11 +785,11 @@ input[type='range'] {
   max-width: 640px;
   width: 92%;
   box-shadow: 0 24px 64px rgba(0,0,0,0.18);
+  max-height: 90vh;
+  overflow-y: auto;
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
+  inset: 0;
+  margin: auto;
 }
 
 .stats-float-dialog::backdrop {
@@ -834,9 +833,8 @@ input[type='range'] {
   max-height: 90vh;
   overflow: hidden;
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  margin: auto;
 }
 
 .settings-dialog::backdrop {
@@ -952,10 +950,8 @@ input[type='range'] {
   width: 92vw;
   box-shadow: 0 20px 60px rgba(0,0,0,0.18);
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
+  inset: 0;
+  margin: auto;
 }
 
 .party-stats-dialog::backdrop {
@@ -1118,11 +1114,46 @@ input[type='range'] {
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
+.map-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
 .map-section-title {
   font-size: 1rem;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
+}
+
+/* 토글: 데스크탑에서 숨김 */
+.map-toggle {
+  display: none;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.map-toggle-btn {
+  padding: 0.3rem 0.9rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.map-toggle-btn.active {
+  background: #fff;
+  color: #1a1a2e;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-weight: 600;
 }
 
 .map-dual {
@@ -1252,10 +1283,8 @@ input[type='range'] {
   width: 90vw;
   box-shadow: 0 12px 40px rgba(0,0,0,0.18);
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
+  inset: 0;
+  margin: auto;
 }
 
 .release-dialog::backdrop {
@@ -1325,14 +1354,10 @@ input[type='range'] {
   padding: 0;
   max-width: 520px;
   width: 92vw;
-  max-height: 80vh;
   box-shadow: 0 20px 60px rgba(0,0,0,0.18);
-  overflow: hidden;
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
+  inset: 0;
+  margin: auto;
 }
 
 .election-dialog::backdrop {
@@ -1342,8 +1367,9 @@ input[type='range'] {
 .election-dialog-inner {
   display: flex;
   flex-direction: column;
-  height: 100%;
   max-height: 80vh;
+  max-height: 80dvh;
+  overflow: hidden;
 }
 
 .election-dialog-header {
@@ -1472,4 +1498,50 @@ input[type='range'] {
   background: #fee2e2;
 }
 
+/* ── Mobile ─────────────────────────────── */
+@media (max-width: 600px) {
+  /* 플로팅 버튼: 넘치는 버튼은 좌우 드래그 */
+  .floating-btns {
+    max-width: 90vw;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+  }
+
+  /* 파라미터 설정: 2열 → 1열 */
+  .param-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .party-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* 수렴·통계 카드: 2열 → 1열 */
+  .stats-summary {
+    grid-template-columns: 1fr;
+  }
+
+  /* 사전·본투표 결과 카드: 2열 → 1열 */
+  .results-section {
+    grid-template-columns: 1fr;
+  }
+
+  /* 지역별 지도: 토글로 하나씩 표시 */
+  .map-toggle {
+    display: flex;
+  }
+
+  .map-dual {
+    display: block;
+  }
+
+  .map-dual--early .map-view-main {
+    display: none;
+  }
+
+  .map-dual--main .map-view-early {
+    display: none;
+  }
+}
 
