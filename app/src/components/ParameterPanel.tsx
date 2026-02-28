@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { PARTY_COLORS, PARTY_LABELS, adjustPartyRates, partyDisplayName } from '../types';
-import type { SimulationParams } from '../types';
+import type { SimulationParams, SimulationResult } from '../types';
 import { REGION_DATA } from '../simulation';
 import { ELECTION_DATASETS } from '../data/electionData';
 import type { ElectionDataset } from '../data/electionData';
+import StatsSummary from './StatsSummary';
 
 interface Props {
   params: SimulationParams;
   onChange: (p: SimulationParams) => void;
   onRun: () => void;
   onShowReal: (election: ElectionDataset) => void;
+  result: SimulationResult | null;
+  resultType: 'simulation' | 'real';
 }
 
 interface Tick {
@@ -269,30 +272,19 @@ function ElectionModal({
   );
 }
 
-export default function ParameterPanel({ params, onChange, onRun, onShowReal }: Props) {
+export default function ParameterPanel({ params, onChange, onRun, onShowReal, result, resultType }: Props) {
   const [locked, setLocked] = useState<boolean[]>(Array(5).fill(false));
   const [appliedElection, setAppliedElection] = useState<ElectionDataset | null>(null);
-  const [showFloating, setShowFloating] = useState(false);
   const [showAdv, setShowAdv] = useState(false);
   const [activeRegionId, setActiveRegionId] = useState(REGION_DATA[0].id);
   const [lockedRegion, setLockedRegion] = useState<Record<string, boolean[]>>(
     Object.fromEntries(REGION_DATA.map((r) => [r.id, Array(5).fill(false)])),
   );
-  const runBtnRef         = useRef<HTMLButtonElement>(null);
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
   const electionDialogRef = useRef<HTMLDialogElement>(null);
   const releaseDialogRef  = useRef<HTMLDialogElement>(null);
+  const statsDialogRef    = useRef<HTMLDialogElement>(null);
 
-  useEffect(() => {
-    const el = runBtnRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowFloating(!entry.isIntersecting),
-      { threshold: 0 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   const set = (key: keyof Omit<SimulationParams, 'partyRates' | 'partyLabels' | 'partyColors' | 'partyCount' | 'regionPartyRates'>) => (v: number) =>
     onChange({ ...params, [key]: v });
@@ -599,19 +591,20 @@ export default function ParameterPanel({ params, onChange, onRun, onShowReal }: 
         </div>
         {formContent}
         {advContent}
+        {/* run-btn-row: 플로팅 버튼으로 대체됨
         <div className="run-btn-row">
           {appliedElection ? (
             <>
               <button className="sim-mode-btn" onClick={() => { handleReleaseElection(); onRun(); }}>
-                시뮬레이션 모드 전환
+                시뮬레이션 모드
               </button>
-              <button ref={runBtnRef} className="real-result-btn" onClick={() => electionDialogRef.current?.showModal()}>
+              <button className="real-result-btn" onClick={() => electionDialogRef.current?.showModal()}>
                 {appliedElection.name}
               </button>
             </>
           ) : (
             <>
-              <button ref={runBtnRef} className="run-btn" onClick={onRun}>
+              <button className="run-btn" onClick={onRun}>
                 시뮬레이션 실행
               </button>
               <button className="election-data-btn" onClick={() => electionDialogRef.current?.showModal()}>
@@ -620,31 +613,43 @@ export default function ParameterPanel({ params, onChange, onRun, onShowReal }: 
             </>
           )}
         </div>
+        */}
       </div>
 
-      {showFloating && (
-        <div className="floating-btns">
-          {appliedElection ? (
-            <>
-              <button className="sim-mode-btn run-btn-floating" onClick={() => { handleReleaseElection(); onRun(); }}>
-                시뮬레이션 모드 전환
+      <div className="floating-btns">
+        {appliedElection ? (
+          <>
+            <button className="sim-mode-btn run-btn-floating" onClick={() => { handleReleaseElection(); onRun(); }}>
+              시뮬레이션 모드
+            </button>
+            <button className="real-result-btn run-btn-floating" onClick={() => electionDialogRef.current?.showModal()}>
+              {appliedElection.name}
+            </button>
+            {result && (
+              <button className="stats-float-btn" onClick={() => statsDialogRef.current?.showModal()}>
+                통계
               </button>
-              <button className="real-result-btn run-btn-floating" onClick={() => electionDialogRef.current?.showModal()}>
-                {appliedElection.name}
+            )}
+          </>
+        ) : (
+          <>
+            <button className="float-settings-btn" onClick={() => settingsDialogRef.current?.showModal()}>
+              ⚙ 설정
+            </button>
+            <button className="run-btn run-btn-floating" onClick={onRun}>
+              시뮬레이션 실행
+            </button>
+            <button className="real-result-btn run-btn-floating" onClick={() => electionDialogRef.current?.showModal()}>
+              실제 선거 데이터
+            </button>
+            {result && (
+              <button className="stats-float-btn" onClick={() => statsDialogRef.current?.showModal()}>
+                통계
               </button>
-            </>
-          ) : (
-            <>
-              <button className="float-settings-btn" onClick={() => settingsDialogRef.current?.showModal()}>
-                ⚙ 설정
-              </button>
-              <button className="run-btn run-btn-floating" onClick={onRun}>
-                시뮬레이션 실행
-              </button>
-            </>
-          )}
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </div>
 
       <dialog
         ref={settingsDialogRef}
@@ -662,7 +667,7 @@ export default function ParameterPanel({ params, onChange, onRun, onShowReal }: 
             {appliedElection ? (
               <>
                 <button className="sim-mode-btn" onClick={() => { handleReleaseElection(); onRun(); settingsDialogRef.current?.close(); }}>
-                  시뮬레이션 모드 전환
+                  시뮬레이션 모드
                 </button>
                 <button
                   className="real-result-btn"
@@ -686,6 +691,29 @@ export default function ParameterPanel({ params, onChange, onRun, onShowReal }: 
       </dialog>
 
       <ElectionModal dialogRef={electionDialogRef} onApply={handleApplyElection} />
+
+      <dialog
+        ref={statsDialogRef}
+        className="stats-float-dialog"
+        onClick={(e) => { if (e.target === e.currentTarget) statsDialogRef.current?.close(); }}
+      >
+        <div className="stats-float-dialog-inner">
+          <div className="stats-float-dialog-header">
+            <h2>통계적 유의성</h2>
+            <button className="dialog-close-btn" onClick={() => statsDialogRef.current?.close()}>✕</button>
+          </div>
+          {result && (
+            <StatsSummary
+              result={result}
+              partyLabels={params.partyLabels}
+              partyColors={params.partyColors}
+              partyCount={params.partyCount}
+              resultType={resultType}
+              inlinePartyTable
+            />
+          )}
+        </div>
+      </dialog>
 
       <dialog
         ref={releaseDialogRef}

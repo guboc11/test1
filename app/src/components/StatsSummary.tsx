@@ -8,6 +8,7 @@ interface Props {
   partyColors: string[];
   partyCount: number;
   resultType: 'simulation' | 'real';
+  inlinePartyTable?: boolean;
 }
 
 function fmtPct(v: number, decimals = 2) {
@@ -23,7 +24,7 @@ function pClass(p: number) {
   return p >= 0.05 ? 'good' : 'bad';
 }
 
-export default function StatsSummary({ result, partyLabels, partyColors, partyCount, resultType }: Props) {
+export default function StatsSummary({ result, partyLabels, partyColors, partyCount, resultType, inlinePartyTable = false }: Props) {
   const { earlyVoteRates, mainVoteRates, earlyVoteTotal, mainVoteTotal } = result;
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -99,12 +100,12 @@ export default function StatsSummary({ result, partyLabels, partyColors, partyCo
         {/* 통계적 유의성 카드 */}
         <div className="stats-card">
           <div className="stats-card-title-row">
-            <span className="stats-card-title">
-              {resultType === 'real' ? '통계적 유의성' : '통계적 유의성'}
-            </span>
-            <button className="party-stats-btn" onClick={() => dialogRef.current?.showModal()}>
-              정당별 보기
-            </button>
+            <span className="stats-card-title">통계적 유의성</span>
+            {!inlinePartyTable && (
+              <button className="party-stats-btn" onClick={() => dialogRef.current?.showModal()}>
+                정당별 보기
+              </button>
+            )}
           </div>
           <div className="stats-row">
             <span className="stats-label">χ² 값</span>
@@ -121,17 +122,9 @@ export default function StatsSummary({ result, partyLabels, partyColors, partyCo
         </div>
       </div>
 
-      {/* 정당별 통계 모달 */}
-      <dialog
-        ref={dialogRef}
-        className="party-stats-dialog"
-        onClick={(e) => { if (e.target === e.currentTarget) dialogRef.current?.close(); }}
-      >
-        <div className="party-stats-dialog-inner">
-          <div className="party-stats-dialog-header">
-            <h2>정당별 통계적 유의성</h2>
-            <button className="dialog-close-btn" onClick={() => dialogRef.current?.close()}>✕</button>
-          </div>
+      {/* 정당별 통계 — 인라인 or 모달 */}
+      {inlinePartyTable ? (
+        <div className="party-stats-inline">
           <table className="party-stats-table">
             <thead>
               <tr>
@@ -164,7 +157,51 @@ export default function StatsSummary({ result, partyLabels, partyColors, partyCo
             p 값: ≥ 5% = 정상, &lt; 5% = 유의한 차이
           </p>
         </div>
-      </dialog>
+      ) : (
+        <dialog
+          ref={dialogRef}
+          className="party-stats-dialog"
+          onClick={(e) => { if (e.target === e.currentTarget) dialogRef.current?.close(); }}
+        >
+          <div className="party-stats-dialog-inner">
+            <div className="party-stats-dialog-header">
+              <h2>정당별 통계적 유의성</h2>
+              <button className="dialog-close-btn" onClick={() => dialogRef.current?.close()}>✕</button>
+            </div>
+            <table className="party-stats-table">
+              <thead>
+                <tr>
+                  <th>정당</th>
+                  <th>사전 득표율</th>
+                  <th>본 득표율</th>
+                  <th>χ² 기여</th>
+                  <th>z 값</th>
+                  <th>p 값</th>
+                </tr>
+              </thead>
+              <tbody>
+                {partyStats.map((s) => (
+                  <tr key={s.label}>
+                    <td>
+                      <span className="party-stats-dot" style={{ background: s.color }} />
+                      {partyDisplayName(s.label)}
+                    </td>
+                    <td>{fmtPct(s.r_e, 1)}</td>
+                    <td>{fmtPct(s.r_m, 1)}</td>
+                    <td className={pClass(s.p)}>{s.chi2i.toFixed(2)}</td>
+                    <td className={zClass(s.z)}>{s.z.toFixed(2)}</td>
+                    <td className={pClass(s.p)}>{fmtPValue(s.p)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="party-stats-note">
+              z 값: |z| &lt; 1.96 = 정상, 1.96–2.58 = 주의, ≥ 2.58 = 비정상<br />
+              p 값: ≥ 5% = 정상, &lt; 5% = 유의한 차이
+            </p>
+          </div>
+        </dialog>
+      )}
     </>
   );
 }

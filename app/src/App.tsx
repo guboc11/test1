@@ -175,7 +175,7 @@ export default function App() {
 
       <InfoDialog dialogRef={dialogRef} />
 
-      <ParameterPanel params={params} onChange={setParams} onRun={handleRun} onShowReal={handleShowReal} />
+      <ParameterPanel params={params} onChange={setParams} onRun={handleRun} onShowReal={handleShowReal} result={result} resultType={resultType} />
 
       {result && (
         <>

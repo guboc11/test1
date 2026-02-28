@@ -762,6 +762,58 @@ input[type='range'] {
 
 .float-settings-btn:hover { background: #f1f5f9; }
 
+.stats-float-btn {
+  padding: 0.75rem 1.25rem;
+  background: #fff;
+  color: #374151;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 40px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.stats-float-btn:hover { background: #f1f5f9; }
+
+/* ── Stats Float Dialog ─────────────────── */
+.stats-float-dialog {
+  border: none;
+  border-radius: 16px;
+  padding: 0;
+  max-width: 640px;
+  width: 92%;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.18);
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+}
+
+.stats-float-dialog::backdrop {
+  background: rgba(0,0,0,0.35);
+}
+
+.stats-float-dialog-inner {
+  padding: 1.5rem 1.75rem 1.75rem;
+}
+
+.stats-float-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.stats-float-dialog-header h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
 .run-btn-floating {
   width: auto;
   min-width: 180px;
@@ -927,6 +979,11 @@ input[type='range'] {
   font-weight: 700;
   color: #1a1a2e;
   margin: 0;
+}
+
+.party-stats-inline {
+  margin-top: 1.25rem;
+  overflow-x: auto;
 }
 
 .party-stats-table {

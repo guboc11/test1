@@ -63,7 +63,7 @@ function patternId(i1: number, i2: number) {
 
 function collectPatterns(
   locations: SvgLocation[],
-  regionMap: Map<string, { earlyVoteRates: number[]; mainVoteRates: number[] }>,
+  regionMap: Map<string, { earlyVoteRates: number[]; mainVoteRates: number[]; earlyVoteCount: number; mainVoteCount: number }>,
   view: 'early' | 'main',
   partyColors: string[],
 ): Map<string, { c1: string; c2: string }> {
@@ -89,12 +89,7 @@ const MIN_LABEL_WIDTH = 28;
 export default function KoreaMap({ result, view, title, partyLabels, partyColors, partyCount, showLegend = false }: Props) {
   const regionMap = new Map(result.regions.map((r) => [r.id, r]));
   const locations = SouthKorea.locations as SvgLocation[];
-  const patterns  = collectPatterns(
-    locations,
-    regionMap as Map<string, { earlyVoteRates: number[]; mainVoteRates: number[] }>,
-    view,
-    partyColors,
-  );
+  const patterns  = collectPatterns(locations, regionMap, view, partyColors);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const [centers, setCenters] = useState<Map<string, Center>>(new Map());
